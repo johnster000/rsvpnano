@@ -22,6 +22,8 @@ on:
     types: [completed]
   workflow_dispatch:
 
+# Forks publish only after enabling Pages (source: GitHub Actions) and setting the
+# DEPLOY_PAGES repository variable to true; see docs/forking.md.
 concurrency:
   group: pages-${{ github.repository }}
   cancel-in-progress: true
@@ -54,7 +56,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Download latest release firmware
-        if: github.repository == 'ionutdecebal/rsvpnano'
+        if: (github.repository == 'ionutdecebal/rsvpnano' || vars.DEPLOY_PAGES == 'true')
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python tools/fetch_release_firmware.py --repo "${{ github.repository }}"
@@ -63,17 +65,17 @@ jobs:
         run: bash ./gradlew checkWeb --no-daemon
 
       - name: Configure GitHub Pages
-        if: github.repository == 'ionutdecebal/rsvpnano'
+        if: (github.repository == 'ionutdecebal/rsvpnano' || vars.DEPLOY_PAGES == 'true')
         uses: actions/configure-pages@v6
 
       - name: Upload GitHub Pages artifact
-        if: github.repository == 'ionutdecebal/rsvpnano'
+        if: (github.repository == 'ionutdecebal/rsvpnano' || vars.DEPLOY_PAGES == 'true')
         uses: actions/upload-pages-artifact@v5
         with:
           path: build/webSite
 
   deploy:
-    if: github.repository == 'ionutdecebal/rsvpnano' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    if: (github.repository == 'ionutdecebal/rsvpnano' || vars.DEPLOY_PAGES == 'true') && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     needs: build
     runs-on: ubuntu-latest
 

@@ -72,7 +72,9 @@ internal data class FirmwareReleaseSource(
     val tag: String,
 )
 
-internal const val DefaultFirmwareRepositoryOwner = "ionutdecebal"
+// This fork publishes its own firmware, catalogs and web companion; keep in step with the firmware's
+// build-time owner (tools/pio_set_version.py) so update checks never offer upstream firmware.
+internal const val DefaultFirmwareRepositoryOwner = "johnster000"
 
 internal fun FirmwareReleaseSource.catalogContentUrl(path: String): String =
     "https://raw.githubusercontent.com/$owner/$repository/${tag.ifBlank { "main" }}/$path"

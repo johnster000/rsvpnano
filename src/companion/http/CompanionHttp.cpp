@@ -5,6 +5,7 @@
 
 #include <array>
 #include <algorithm>
+#include <cctype>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <string>
@@ -82,9 +83,23 @@ namespace {
         return false;
     }
 
+    [[nodiscard]] bool isPagesOrigin(std::string_view origin, std::string_view owner) {
+        constexpr std::string_view scheme = "https://";
+        constexpr std::string_view suffix = ".github.io";
+        if (owner.empty() || origin.size() != scheme.size() + owner.size() + suffix.size()
+            || !origin.starts_with(scheme) || !origin.ends_with(suffix))
+            return false;
+        const std::string_view host = origin.substr(scheme.size(), owner.size());
+        return std::equal(host.begin(), host.end(), owner.begin(), [](char left, char right) {
+            return std::tolower(static_cast<unsigned char>(left)) == std::tolower(static_cast<unsigned char>(right));
+        });
+    }
+
     [[nodiscard]] bool isAllowedOrigin(std::string_view origin) {
-        return origin == "https://ionutdecebal.github.io" || isLocalDevelopmentOrigin(origin, "localhost") ||
-               isLocalDevelopmentOrigin(origin, "127.0.0.1") || isLocalDevelopmentOrigin(origin, "[::1]");
+        // The upstream site and this build's own fork site may manage the reader.
+        return isPagesOrigin(origin, settings::kUpstreamRepositoryOwner)
+            || isPagesOrigin(origin, settings::kDefaultRepositoryOwner) || isLocalDevelopmentOrigin(origin, "localhost")
+            || isLocalDevelopmentOrigin(origin, "127.0.0.1") || isLocalDevelopmentOrigin(origin, "[::1]");
     }
 
 } // namespace

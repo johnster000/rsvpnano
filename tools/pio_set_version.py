@@ -2,12 +2,15 @@ Import("env")
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
 
 PROJECT_DIR = Path(env.subst("$PROJECT_DIR"))
 SHORT_SHA_LENGTH = 12
+UPSTREAM_OWNER = "ionutdecebal"
+OWNER_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
 
 
 def run_git(*args: str) -> str:
@@ -58,7 +61,22 @@ def detect_version() -> str:
     return version
 
 
+def detect_repository_owner() -> str:
+    """Owner whose releases, catalogs and GitHub Pages site this build trusts by default."""
+    owner = os.environ.get("RSVP_REPOSITORY_OWNER", "").strip() or os.environ.get("GITHUB_REPOSITORY_OWNER", "").strip()
+    if not owner:
+        try:
+            remote = run_git("remote", "get-url", "origin")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            remote = ""
+        match = re.search(r"github\.com[:/]([^/]+)/[^/]+?(?:\.git)?/?$", remote)
+        owner = match.group(1) if match else ""
+    owner = owner.lower()
+    return owner if OWNER_PATTERN.match(owner) else UPSTREAM_OWNER
+
+
 version = detect_version()
+repository_owner = detect_repository_owner()
 generated_dir = Path(env.subst("$BUILD_DIR")) / "generated"
 generated_header = generated_dir / "FirmwareVersion.generated.h"
 contents = f"#pragma once\n\ninline constexpr char kFirmwareVersion[] = {json.dumps(version)};\n"
@@ -68,5 +86,7 @@ if not generated_header.exists() or generated_header.read_text(encoding="utf-8")
     generated_header.write_text(contents, encoding="utf-8")
 
 env.AppendUnique(CPPPATH=[str(generated_dir)])
+env.Append(CPPDEFINES=[("RSVP_REPOSITORY_OWNER", env.StringifyMacro(repository_owner))])
 
 print(f"Firmware version: {version}")
+print(f"Firmware repository owner: {repository_owner}")

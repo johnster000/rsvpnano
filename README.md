@@ -215,6 +215,7 @@ The staged website is written to `build/webSite`. Detailed native setup is in th
 - [Conversion format and behavior](docs/conversion/spec.md)
 - [Configuration files](docs/configuration.md)
 - [Hardware architecture and bring-up notes](docs/hardware/README.md)
+- [Running your own fork](docs/forking.md)
 - [Reader fonts](fonts/README.md)
 - [Themes](themes/README.md)
 - [Locale packs](locale-packs/README.md)

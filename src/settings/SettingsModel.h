@@ -13,7 +13,12 @@
 namespace settings {
 
     inline constexpr std::string_view kMathFontTarget = "math";
-    inline constexpr std::string_view kDefaultRepositoryOwner = "ionutdecebal";
+#ifndef RSVP_REPOSITORY_OWNER
+// tools/pio_set_version.py defines this from the building fork; other builds keep the upstream project.
+#define RSVP_REPOSITORY_OWNER "ionutdecebal"
+#endif
+    inline constexpr std::string_view kUpstreamRepositoryOwner = "ionutdecebal";
+    inline constexpr std::string_view kDefaultRepositoryOwner = RSVP_REPOSITORY_OWNER;
 
     enum class ReadingMode : uint8_t {
         rsvp,
