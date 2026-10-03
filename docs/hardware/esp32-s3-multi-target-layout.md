@@ -95,7 +95,7 @@ PlatformIO selects the revision header with `RSVP_LCD_349_REVISION_HEADER`.
 
 The AMOLED 1.8 v1 and v2 boards share audio, power, storage, system, and IMU code. Display and touch
 binding live in version folders because v1 uses SH8601 plus FT6336-compatible touch, while v2 uses
-CO5300 plus CST92xx-compatible touch:
+CO5300 plus CST820 touch (the `cst816` driver):
 
 ```text
 src/platforms/waveshare_amoled_18/v1/
@@ -103,7 +103,7 @@ src/platforms/waveshare_amoled_18/v2/
 ```
 
 Each version provides `WaveshareAmoled18Version.h`. That header owns the board label, OTA asset,
-touch address, display panel-memory rotation, and default UI orientation. PlatformIO selects it with
+touch address and default UI orientation. PlatformIO selects it with
 `RSVP_AMOLED_18_VERSION_HEADER`, so orientation fixes stay in the board version instead of adding
 shared App/Input/Display conditionals.
 
@@ -114,7 +114,7 @@ shared App/Input/Display conditionals.
 3. Implement the required `Board*.cpp` files by binding those facts to the shared board API.
 4. Reuse drivers from `src/drivers` where possible.
 5. Add a PlatformIO environment that includes only that platform folder and its selected drivers.
-6. Keep app behavior in `App`, `DisplayManager`, `Input`, and domain modules, not in the platform folder.
+6. Keep app behavior in `App`, `ui/`, `Input`, and domain modules, not in the platform folder.
 
 The desired boundary is simple: adding a board should mostly mean adding a platform folder and build
 environment, not teaching app/storage/display logic about another hardware variant.

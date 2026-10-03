@@ -10,6 +10,8 @@ was lost.
 ## Browser connections
 
 The hosted companion uses HTTPS while the reader serves HTTP on the local network.
+The reader accepts browser origins from the upstream Pages site, the Pages site of the
+repository owner it was built for (see [Running your own fork](forking.md)), and localhost.
 Device requests set the fetch option `targetAddressSpace: "local"` through Ktor;
 internet catalog and release downloads use a separate client without that option.
 Supporting browsers can then ask for local-network permission for device hostnames
@@ -24,6 +26,7 @@ over USB in a browser supporting Web Serial.
 | Method | Path | Success response |
 | --- | --- | --- |
 | `GET` | `/api/v2/device` | `{ "ssid": "RSVP-Nano-XXXXXX", "firmwareVersion": "…", "otaAsset": "…" }` |
+| `POST` | `/api/v2/storage/repair` | Storage check report; reloads fonts, themes and locales |
 | `GET` | `/api/v2/library` | Bare array of library entries |
 | `POST` | `/api/v2/library?category=…` | Created entry (`201` and `Location`) |
 | `DELETE` | `/api/v2/library/{id}` | `204` |
