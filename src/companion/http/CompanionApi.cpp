@@ -280,6 +280,8 @@ companion::api::Result<StorageMigration::Report> CompanionApi::repairStorage(htt
         storage_.refreshBooks();
         readerScreen_.fonts.loadFromSd();
         interfaceScreen_.themes.loadFromSd();
+        // Reloading replaced the theme the UI points at; reader faces refresh when sync ends.
+        ui_.setTheme(interfaceScreen_.themes.resolve(settingsStore_.settings().interface.selectedThemeId));
         localeCatalog_ = locales::scanInstalled(Board::Storage::filesystem(), static_cast<size_t>(UiText::Count));
     }
     return report;

@@ -610,6 +610,7 @@ void App::updateBackgroundJob() {
             return;
         }
         if (completed == JobKind::StorageCheck) {
+            reloadStorageCatalogs();
             showTransientStatus(immediateUi_.text(UiText::Storage), update.line1, update.line2, 1800,
                                 screens::Screen::Device);
             return;
@@ -675,13 +676,7 @@ void App::runBackgroundJob() {
                                                             .fonts = readerScreen_.fonts.families().size() - 1,
                                                             .themes = interfaceScreen_.themes.themes().size() - 1,
                                                         });
-        if (storage_.mounted()) {
-            storage_.refreshBooks();
-            readerScreen_.fonts.loadFromSd();
-            interfaceScreen_.themes.loadFromSd();
-            localeCatalog_ =
-                locales::scanInstalled(Board::Storage::filesystem(), static_cast<size_t>(UiText::Count));
-        }
+        // Catalog reloads run on the main loop when the job completes: the UI holds pointers into them.
         const std::string resultDetail = report.issues.empty()
                                            ? "Checked " + std::to_string(report.checked) + ", moved "
                                                  + std::to_string(report.moved) + ", cleaned "
@@ -836,6 +831,17 @@ void App::exitUsbTransfer(screens::Screen destination) {
     libraryScreen_.invalidate();
     screen_ = destination;
     renderScreen(millis());
+}
+
+void App::reloadStorageCatalogs() {
+    if (!storage_.mounted())
+        return;
+    storage_.refreshBooks();
+    libraryScreen_.invalidate();
+    readerScreen_.fonts.loadFromSd();
+    localeCatalog_ = locales::scanInstalled(Board::Storage::filesystem(), static_cast<size_t>(UiText::Count));
+    // Reloads themes and re-resolves the selected theme, locale and reader faces against the new catalogs.
+    applySettings();
 }
 
 void App::applySettings() {
