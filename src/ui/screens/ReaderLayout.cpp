@@ -3,6 +3,14 @@
 #include <cstdio>
 
 namespace screens::readerLayout {
+    Control controlAt(const Controls& controls, uint16_t x, uint16_t y) {
+        for (const ControlButton& button: controls.buttons) {
+            if (button.control != Control::None && ui::contains(button.rect, x, y))
+                return button.control;
+        }
+        return Control::None;
+    }
+
     ui::Rect batteryRect(int16_t width, int16_t height) {
         return horizontalChrome(width, height, false).battery;
     }

@@ -55,6 +55,7 @@ private:
     void handleScreenAction(screens::Action action, uint32_t nowMs);
     void handleInput(Input::ActionMask actions, uint32_t nowMs);
     void handleTouch(uint32_t nowMs);
+    void leaveReader(uint32_t nowMs);
     void runRss();
     void runBookOpen(size_t index, uint32_t nowMs);
     bool requestTypographyRefresh();

@@ -65,6 +65,7 @@ namespace screens {
         EnableStorageEncryption,
         OtaCheck,
         OtaInstall,
+        OpenMenu,
     };
 
     Action read(ui::Context& ui, std::string_view title, std::string_view author, uint8_t progress, Screen& screen);

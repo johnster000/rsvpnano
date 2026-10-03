@@ -8,7 +8,7 @@ namespace screens {
         const ui::Rect content = detail::tabContent(ui);
         constexpr int16_t gap = 6;
         ui::Grid actions{content, 3, 56, gap};
-        if (ui.button(actions.next(), "<<"))
+        if (detail::back(ui, actions.next()))
             screen = Screen::Device;
         if (ui.button(actions.next(), ui.text(UiText::CheckOnly)))
             return Action::OtaCheck;

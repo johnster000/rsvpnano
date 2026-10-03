@@ -9,7 +9,7 @@ namespace screens {
         constexpr int16_t resetWidth = 90;
         const int16_t rowHeight = static_cast<int16_t>((content.h - gap * 2) / 3);
 
-        if (ui.button({content.x, content.y, backWidth, rowHeight}, "<<"))
+        if (detail::back(ui, {content.x, content.y, backWidth, rowHeight}))
             screen = Screen::Settings;
         changed |= ui.slider({static_cast<int16_t>(content.x + backWidth + gap), content.y,
                               static_cast<int16_t>(content.w - backWidth - gap), rowHeight},

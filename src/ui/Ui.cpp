@@ -479,6 +479,41 @@ namespace ui {
         return activated;
     }
 
+    bool Context::controlButton(Rect rect, Icon icon, std::string_view text, bool primary) {
+        rect = paintBounds(rect);
+        const size_t slot = nextSlot_;
+        const bool activated = tapped(slot, rect);
+        uint32_t state = combine(signature(text), static_cast<uint8_t>(icon));
+        state = combine(state, primary);
+        if (claim(Kind::Button, rect, state).changed) {
+            constexpr int16_t kIconWidth = 24;
+            constexpr int16_t kIconGap = 8;
+            const int16_t available = std::max<int16_t>(0, static_cast<int16_t>(rect.w - kIconWidth - kIconGap - 12));
+            const int16_t labelWidth = text.empty() ? 0 : std::min<int16_t>(textWidthFor(text, 2), available);
+            const int16_t contentWidth =
+                static_cast<int16_t>((icon == Icon::None ? 0 : kIconWidth) + (labelWidth > 0 ? labelWidth : 0)
+                                     + (icon != Icon::None && labelWidth > 0 ? kIconGap : 0));
+            const int16_t contentX = static_cast<int16_t>((rect.w - contentWidth) / 2);
+            const int16_t labelX =
+                static_cast<int16_t>(contentX + (icon == Icon::None ? 0 : kIconWidth + kIconGap));
+            const auto label = prepareText({labelX, 0, labelWidth, rect.h}, text, 2, TextAlign::Left);
+            paint(rect, [&](Arduino_GFX& output, Rect rect) {
+                const uint16_t surface =
+                    color(primary ? ui::themes::ColorRole::Accent : ui::themes::ColorRole::SurfaceMuted);
+                const uint16_t ink =
+                    color(primary ? ui::themes::ColorRole::Background : ui::themes::ColorRole::Foreground);
+                output.fillRoundRect(rect.x, rect.y, rect.w, rect.h, 7, surface);
+                output.drawRoundRect(rect.x, rect.y, rect.w, rect.h, 7,
+                                     color(primary ? ui::themes::ColorRole::Accent : ui::themes::ColorRole::Outline));
+                if (icon != Icon::None)
+                    drawIcon(output, {static_cast<int16_t>(rect.x + contentX), rect.y, kIconWidth, rect.h}, icon, ink,
+                             surface);
+                drawText(output, label, ink, rect.x, rect.y);
+            });
+        }
+        return activated;
+    }
+
     bool Context::tab(Rect rect, std::string_view text, bool active, Icon icon) {
         rect = paintBounds(rect);
         uint32_t state = combine(signature(text), active);

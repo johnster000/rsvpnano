@@ -237,6 +237,13 @@ namespace {
         }
     }
 
+    void test_watch_reader_keeps_gesture_only_controls() {
+        for (const auto size: watchResolutions) {
+            for (const bool left: {false, true})
+                TEST_ASSERT_FALSE(screens::readerLayout::controls(size.width, size.height, left).available());
+        }
+    }
+
     void test_dock_reaches_all_four_destinations() {
         constexpr std::array destinations{screens::Screen::Read, screens::Screen::Settings, screens::Screen::Device,
                                           screens::Screen::FocusTimers};
@@ -317,6 +324,7 @@ int main() {
     RUN_TEST(test_paging_never_exposes_offscreen_hit_targets_and_resets);
     RUN_TEST(test_reader_layout_fits_and_preserves_handedness);
     RUN_TEST(test_rsvp_arrow_and_touch_target_share_the_safe_lower_corner);
+    RUN_TEST(test_watch_reader_keeps_gesture_only_controls);
     RUN_TEST(test_dock_reaches_all_four_destinations);
     RUN_TEST(test_chapter_selection_does_not_activate_until_center_tap);
     return UNITY_END();

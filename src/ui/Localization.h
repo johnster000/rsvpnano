@@ -174,6 +174,8 @@ enum class UiText : uint8_t {
     Hide,
     Width,
     Gap,
+    Menu,
+    Back,
     Count,
 };
 

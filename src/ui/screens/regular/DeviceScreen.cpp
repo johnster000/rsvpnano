@@ -115,7 +115,7 @@ namespace screens {
 
         ui::Row buttons{actions.next(controlHeight), 8};
         const int16_t buttonWidth = static_cast<int16_t>((buttons.bounds.w - buttons.gap) / 2);
-        if (ui.button(buttons.next(buttonWidth), "<<")) {
+        if (detail::back(ui, buttons.next(buttonWidth))) {
             encryptionAcknowledged = false;
             encryptionControlsVisible = false;
             screen = Screen::Device;

@@ -17,6 +17,7 @@
 #include "text/BidiText.h"
 #include "ui/Ui.h"
 #include "ui/screens/PageReaderScreen.h"
+#include "ui/screens/ReaderLayout.h"
 #include "ui/screens/Screens.h"
 
 namespace screens {
@@ -45,8 +46,8 @@ namespace screens {
         bool batteryLongPressed(const ui::Touch& touch) const;
         bool batteryTouched(const ui::Touch& touch) const;
         bool previousSentenceTapped(uint16_t x, uint16_t y) const;
-        void handleTouch(ui::Context& ui, uint32_t nowMs, Preferences& preferences,
-                         settings::SettingsStore& settingsStore);
+        Action handleTouch(ui::Context& ui, uint32_t nowMs, Preferences& preferences,
+                           settings::SettingsStore& settingsStore);
         void toggle(Preferences& preferences, uint32_t nowMs);
         void update(Preferences& preferences, uint32_t nowMs);
 
@@ -80,6 +81,9 @@ namespace screens {
             Wpm,
             Paragraph
         };
+        bool pausedControlsVisible() const;
+        Action runControl(readerLayout::Control control, uint32_t nowMs, Preferences& preferences,
+                          settings::SettingsStore& settingsStore);
         void browseParagraphs(uint16_t y, uint32_t nowMs);
         bool doubleTap(uint16_t x, uint16_t y, uint32_t nowMs);
         void resetTouch();
@@ -122,6 +126,7 @@ namespace screens {
         size_t touchStartWord_ = 0;
         int scrubSteps_ = 0;
         TouchIntent touchIntent_ = TouchIntent::None;
+        readerLayout::Control pressedControl_ = readerLayout::Control::None;
         uint32_t lastTapMs_ = 0;
         uint16_t lastTapX_ = 0;
         uint16_t lastTapY_ = 0;

@@ -32,7 +32,7 @@ namespace screens {
         }
         progress[progressLength++] = '%';
         const std::string_view progressText{progress, progressLength};
-        if (ui.button(resume, title, true, ui::Icon::Bookmark, 2, author, progressText)) {
+        if (ui.button(resume, title, true, ui::Icon::Play, 2, author, progressText)) {
             return Action::Resume;
         }
         if (ui.iconButton(language, ui::Icon::Language)) {

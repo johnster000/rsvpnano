@@ -18,6 +18,9 @@ namespace screens::readerLayout {
         return {left, 42, static_cast<int16_t>(std::max<int>(0, width - left - right)),
                 static_cast<int16_t>(std::max<int>(0, height - 84))};
     }
+    Controls controls(int16_t, int16_t, bool) {
+        return {};
+    }
     ui::Rect portraitTopStrip(int16_t width) {
         return {0, 0, width, 64};
     }

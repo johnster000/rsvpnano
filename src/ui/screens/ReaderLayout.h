@@ -27,6 +27,37 @@ namespace screens::readerLayout {
     std::string batteryText(settings::BatteryLabel format, const Board::Power::BatteryState& battery);
     std::string progressText(ui::Context& ui, settings::FooterMetric format, uint8_t percent, uint32_t minutes);
 
+    // Touch controls shown while horizontal reading is paused. Presentations without them report none.
+    enum class Control : uint8_t {
+        None,
+        Menu,
+        Rewind,
+        Slower,
+        Faster,
+        Play,
+    };
+
+    struct ControlButton {
+        Control control = Control::None;
+        ui::Rect rect;
+    };
+
+    struct Controls {
+        ui::Rect info;
+        ui::Rect chapter;
+        ui::Rect progress;
+        ui::Rect battery;
+        ui::Rect speed;
+        std::array<ControlButton, 5> buttons{};
+
+        bool available() const {
+            return buttons.front().control != Control::None;
+        }
+    };
+
+    Controls controls(int16_t width, int16_t height, bool leftHanded);
+    Control controlAt(const Controls& controls, uint16_t x, uint16_t y);
+
     struct Chrome {
         bool vertical;
         std::string_view chapter;
@@ -38,6 +69,8 @@ namespace screens::readerLayout {
         uint32_t topState;
         uint32_t bottomState;
         bool ghostHidden = false;
+        std::string_view speed;
+        uint8_t percent = 0;
     };
     void drawArrows(ui::Context& ui, const settings::ReadingSettings& settings, bool reading, int16_t wordHeight,
                     bool ghostHidden = false);
@@ -52,4 +85,6 @@ namespace screens::readerLayout {
                           const Board::Power::BatteryState& battery, const HorizontalChrome& layout);
     void chrome(ui::Context& ui, const Chrome& view, const settings::ReadingSettings& settings,
                 const Board::Power::BatteryState& battery);
+    void pausedControls(ui::Context& ui, const Chrome& view, const settings::ReadingSettings& settings,
+                        const Board::Power::BatteryState& battery);
 } // namespace screens::readerLayout

@@ -23,7 +23,7 @@ namespace screens {
         const int16_t rowHeight = std::min<int16_t>(34, static_cast<int16_t>(
             (content.h - gap * static_cast<int16_t>(rows - 1)) / static_cast<int16_t>(rows)));
         ui::Grid grid{content, columns, rowHeight, gap};
-        if (ui.button(grid.next(), "<<"))
+        if (detail::back(ui, grid.next()))
             screen = Screen::Read;
         if (ui.button(grid.next(), ui.text(UiText::Reset))) {
             const bool changed = !overrides.languageFonts.empty();

@@ -8,6 +8,10 @@ namespace screens::detail {
         constexpr int16_t kRightInset = 48;
     } // namespace
 
+    bool back(ui::Context& ui, ui::Rect rect) {
+        return ui.controlButton(rect, ui::Icon::Back, rect.w >= 108 ? ui.text(UiText::Back) : std::string_view{});
+    }
+
     Action navigation(ui::Context& ui, Screen active, Screen& screen) {
         if (ui.width() < 620 || ui.height() < 150 || ui.height() > 240) {
             return Action::None;

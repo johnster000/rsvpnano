@@ -25,7 +25,7 @@ namespace screens {
         constexpr int16_t gap = 6;
         constexpr int16_t backWidth = 56;
         constexpr int16_t topHeight = 42;
-        if (ui.button({content.x, content.y, backWidth, topHeight}, "<<"))
+        if (detail::back(ui, {content.x, content.y, backWidth, topHeight}))
             screen = Screen::Settings;
         if (ui.slider({static_cast<int16_t>(content.x + backWidth + gap), content.y,
                        static_cast<int16_t>(content.w - backWidth - gap), topHeight},

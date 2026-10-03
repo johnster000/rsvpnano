@@ -1662,6 +1662,78 @@ void test_appearance_controls_fit_lcd() {
     TEST_ASSERT_EQUAL(128, editor.reader.chapter.y);
 }
 
+void test_paused_reader_controls_are_reachable_and_clear_of_the_word() {
+    using screens::readerLayout::Control;
+    struct Size {
+        int16_t width;
+        int16_t height;
+    };
+    for (const Size size: {Size{640, 172}, Size{480, 480}, Size{600, 450}}) {
+        const auto area = screens::readerLayout::readingArea(size.width, size.height, false);
+        // The largest built-in strike is centered on the screen; its ink must stay inside the repaint area.
+        const int16_t inkTop = static_cast<int16_t>((size.height - 53) / 2);
+        TEST_ASSERT_LESS_OR_EQUAL(inkTop, area.y);
+        TEST_ASSERT_GREATER_OR_EQUAL(inkTop + 53, area.y + area.h);
+        for (const bool left: {false, true}) {
+            const auto controls = screens::readerLayout::controls(size.width, size.height, left);
+            TEST_ASSERT_TRUE(controls.available());
+            TEST_ASSERT_LESS_OR_EQUAL(area.y, controls.info.y + controls.info.h);
+            for (size_t i = 0; i < controls.buttons.size(); ++i) {
+                const auto& button = controls.buttons[i];
+                TEST_ASSERT_NOT_EQUAL(static_cast<int>(Control::None), static_cast<int>(button.control));
+                TEST_ASSERT_GREATER_OR_EQUAL(44, button.rect.h);
+                TEST_ASSERT_GREATER_OR_EQUAL(56, button.rect.w);
+                TEST_ASSERT_GREATER_OR_EQUAL(0, button.rect.x);
+                TEST_ASSERT_LESS_OR_EQUAL(size.width, button.rect.x + button.rect.w);
+                TEST_ASSERT_LESS_OR_EQUAL(size.height, button.rect.y + button.rect.h);
+                TEST_ASSERT_GREATER_OR_EQUAL(area.y + area.h, button.rect.y);
+                const auto center = [](ui::Rect rect) {
+                    return std::pair<uint16_t, uint16_t>{static_cast<uint16_t>(rect.x + rect.w / 2),
+                                                         static_cast<uint16_t>(rect.y + rect.h / 2)};
+                };
+                const auto [x, y] = center(button.rect);
+                TEST_ASSERT_EQUAL(static_cast<int>(button.control),
+                                  static_cast<int>(screens::readerLayout::controlAt(controls, x, y)));
+                for (size_t j = i + 1; j < controls.buttons.size(); ++j) {
+                    const auto overlap = ui::intersection(button.rect, controls.buttons[j].rect);
+                    TEST_ASSERT_TRUE(overlap.w == 0 || overlap.h == 0);
+                }
+                const auto speedOverlap = ui::intersection(button.rect, controls.speed);
+                TEST_ASSERT_TRUE(speedOverlap.w == 0 || speedOverlap.h == 0);
+            }
+            TEST_ASSERT_EQUAL(static_cast<int>(Control::None),
+                              static_cast<int>(screens::readerLayout::controlAt(
+                                  controls, static_cast<uint16_t>(size.width / 2), static_cast<uint16_t>(size.height / 2))));
+            const auto& menu = controls.buttons.front().rect;
+            const auto& play = controls.buttons.back().rect;
+            TEST_ASSERT_EQUAL(static_cast<int>(Control::Play), static_cast<int>(controls.buttons.back().control));
+            TEST_ASSERT_TRUE(left ? play.x < menu.x : play.x > menu.x);
+        }
+    }
+}
+
+void test_paused_reader_controls_draw_inside_the_lcd() {
+    BoundsRecordingGfx gfx(640, 172);
+    ui::Context context(gfx);
+    context.setTheme(theme());
+    settings::ReadingSettings settings;
+    const Board::Power::BatteryState battery{{true, 3.9f, 64}, 0, false};
+    for (const bool reading: {false, true}) {
+        context.beginFrame(static_cast<uint8_t>(screens::Screen::Reader));
+        screens::readerLayout::chrome(context,
+                                      {.vertical = false,
+                                       .chapter = "The Place Inside the Blizzard",
+                                       .footer = "42%",
+                                       .batteryLabel = "64%",
+                                       .reading = reading,
+                                       .speed = "300 WPM",
+                                       .percent = 42},
+                                      settings, battery);
+        context.endFrame();
+        TEST_ASSERT_LESS_OR_EQUAL(172, gfx.maximumBottom);
+    }
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_unchanged_widget_does_not_draw_or_flush);
@@ -1715,6 +1787,8 @@ int main(int, char**) {
     RUN_TEST(test_compact_settings_screens_stay_inside_the_content_area);
     RUN_TEST(test_hourglass_source_follows_glass_and_fallen_sand_settles_at_base);
     RUN_TEST(test_appearance_controls_fit_lcd);
+    RUN_TEST(test_paused_reader_controls_are_reachable_and_clear_of_the_word);
+    RUN_TEST(test_paused_reader_controls_draw_inside_the_lcd);
     RUN_TEST(appearanceChecks::fourRotaries);
     RUN_TEST(appearanceChecks::wordTargets);
     RUN_TEST(appearanceChecks::batteryAndArrowRedraw);

@@ -482,7 +482,8 @@ namespace screens {
             footer = readerLayout::progressText(ui, settings.footerMetric, progress, minutes);
         }
         const bool cjkPacing = ReadingLoop::pacingMode(session) == settings::ReadingPacing::cjkPhrase;
-        const bool overlayVisible = wpmFeedbackUntilMs_ > nowMs;
+        const bool controlsVisible = pausedControlsVisible();
+        const bool overlayVisible = wpmFeedbackUntilMs_ > nowMs && !controlsVisible;
 
         const ui::Rect readingArea = ui.paintBounds(readerLayout::readingArea(ui.width(), ui.height(), vertical));
         if (pageView) {
@@ -638,7 +639,8 @@ namespace screens {
             const bool rightToLeft = bidi && rsvpBidi_.rightToLeft();
             preparePhantom(phantoms_[0], before, rightToLeft);
             preparePhantom(phantoms_[1], after, rightToLeft);
-            const auto arrows = vertical ? ui::TextLayout{} : readerLayout::prepareArrows(ui, settings, reading);
+            const bool arrowsShown = !vertical && !controlsVisible;
+            const auto arrows = arrowsShown ? readerLayout::prepareArrows(ui, settings, reading) : ui::TextLayout{};
             ui.paint(readingArea, [&](Arduino_GFX& gfx, ui::Rect translated) {
                 Arduino_GFX& previousOutput = text_.setOutput(gfx);
                 const int16_t dx = static_cast<int16_t>(translated.x - readingArea.x);
@@ -695,7 +697,8 @@ namespace screens {
                                 rightToLeft, wordBaseline, centerY, vertical, ui);
 
                 if (!vertical) {
-                    readerLayout::drawArrows(ui, gfx, settings, reading, arrows, inkBottom - inkTop + 13, dx, dy);
+                    if (arrowsShown)
+                        readerLayout::drawArrows(ui, gfx, settings, reading, arrows, inkBottom - inkTop + 13, dx, dy);
                     gfx.setFont(static_cast<const GFXfont*>(nullptr));
                     gfx.setTextWrap(false);
                     gfx.setTextSize(2);
@@ -716,7 +719,8 @@ namespace screens {
         renderedWordIndex_ = pageView ? SIZE_MAX : session.state.wordIndex;
 
         const std::string batteryLabel = readerLayout::batteryText(settings.batteryLabel, battery);
-        const std::string overlay = overlayVisible ? std::to_string(settings.wpm) + (cjkPacing ? " CPM" : " WPM") : "";
+        const std::string speed = std::to_string(settings.wpm) + (cjkPacing ? " CPM" : " WPM");
+        const std::string overlay = overlayVisible ? speed : "";
         readerLayout::chrome(ui,
                              {
                                  .vertical = vertical,
@@ -734,6 +738,8 @@ namespace screens {
                                  .bottomState = pageView ? ui::Context::combine(0, settings.leftHanded)
                                                          : frameSignature(session.currentWord, overlayVisible,
                                                                           cjkPacing, settings),
+                                 .speed = speed,
+                                 .percent = progress,
                              },
                              settings, battery);
     }
@@ -767,21 +773,58 @@ namespace screens {
                             x, y);
     }
 
-    void ReaderScreen::handleTouch(ui::Context& ui, uint32_t nowMs, Preferences& preferences,
-                                   settings::SettingsStore& settingsStore) {
+    bool ReaderScreen::pausedControlsVisible() const {
+        return !session.playing && session.metadata.writingMode != WritingMode::verticalRl
+            && readerLayout::controls(width_, height_, settings_.leftHanded).available();
+    }
+
+    Action ReaderScreen::runControl(readerLayout::Control control, uint32_t nowMs, Preferences& preferences,
+                                    settings::SettingsStore& settingsStore) {
+        switch (control) {
+        case readerLayout::Control::Menu:
+            return Action::OpenMenu;
+        case readerLayout::Control::Rewind:
+            ReadingLoop::rewindSentence(session);
+            pauseAtSentenceEndRequested_ = false;
+            playLocked_ = false;
+            ReadingProgress::save(session, preferences, true, nowMs);
+            break;
+        case readerLayout::Control::Slower:
+        case readerLayout::Control::Faster:
+            ReadingLoop::adjustWpm(settings_, control == readerLayout::Control::Faster ? 1 : -1);
+            settingsStore.acceptChanges();
+            break;
+        case readerLayout::Control::Play:
+            start(nowMs, true);
+            break;
+        case readerLayout::Control::None:
+            break;
+        }
+        return Action::None;
+    }
+
+    Action ReaderScreen::handleTouch(ui::Context& ui, uint32_t nowMs, Preferences& preferences,
+                                     settings::SettingsStore& settingsStore) {
         width_ = ui.width();
         height_ = ui.height();
         const ui::Touch* event = ui.touch();
         if (event == nullptr)
-            return;
+            return Action::None;
         const ui::Touch& touch = *event;
         const bool ended = ui::hasTouch(touch, ui::TouchRelease);
         const bool held = ui::hasTouch(touch, ui::TouchHold);
+        // Regular horizontal layouts show buttons while paused, so taps no longer need double-tap timing.
+        const readerLayout::Controls controlLayout =
+            session.metadata.writingMode == WritingMode::verticalRl
+                ? readerLayout::Controls{}
+                : readerLayout::controls(width_, height_, settings_.leftHanded);
+        const bool deckMode = controlLayout.available();
+        const bool controls = deckMode && !session.playing;
 
         if (ended && touchIntent_ == TouchIntent::PlayHold) {
             resetTouch();
             requestPause(preferences, nowMs);
-            return;
+            return Action::None;
         }
         if (ui::hasTouch(touch, ui::TouchStart)) {
             touching_ = true;
@@ -790,10 +833,23 @@ namespace screens {
             touchStartWord_ = session.state.wordIndex;
             scrubSteps_ = 0;
             touchIntent_ = TouchIntent::None;
-            return;
+            pressedControl_ = controls ? readerLayout::controlAt(controlLayout, touch.x, touch.y)
+                                       : readerLayout::Control::None;
+            return Action::None;
         }
         if (!touching_)
-            return;
+            return Action::None;
+        if (pressedControl_ != readerLayout::Control::None) {
+            // A press that starts on a button belongs to that button, like toolkit buttons: a drag cancels it.
+            if (!ended)
+                return Action::None;
+            const readerLayout::Control pressed = pressedControl_;
+            resetTouch();
+            lastTapValid_ = false;
+            if (!ui::hasTouch(touch, ui::TouchTap))
+                return Action::None;
+            return runControl(pressed, nowMs, preferences, settingsStore);
+        }
 
         const int deltaX = static_cast<int>(touch.x) - touchStartX_;
         const int deltaY = static_cast<int>(touch.y) - touchStartY_;
@@ -806,28 +862,28 @@ namespace screens {
             settingsStore.acceptChanges();
             lastTapValid_ = false;
             resetTouch();
-            return;
+            return Action::None;
         }
         if (touchIntent_ == TouchIntent::None && ended && tapLike && batteryTapped({ui::TouchTap, touch.x, touch.y})) {
             settings_.batteryLabel = settings::cycleEnum(settings_.batteryLabel);
             settingsStore.acceptChanges();
             lastTapValid_ = false;
             resetTouch();
-            return;
+            return Action::None;
         }
 
         if (session.playing) {
             if (held && tapLike && !playLocked_) {
                 resetTouch();
                 requestPause(preferences, nowMs);
-                return;
+                return Action::None;
             }
             if (!ended)
-                return;
+                return Action::None;
             resetTouch();
             if (!tapLike) {
                 lastTapValid_ = false;
-                return;
+                return Action::None;
             }
             if (previousSentenceTapped(touch.x, touch.y)) {
                 lastTapValid_ = false;
@@ -836,23 +892,23 @@ namespace screens {
                 pauseAtSentenceEndRequested_ = false;
                 playLocked_ = false;
                 ReadingProgress::save(session, preferences, true, nowMs);
-                return;
+                return Action::None;
             }
-            if (playLocked_ || pauseAtSentenceEndRequested_) {
+            if (deckMode || playLocked_ || pauseAtSentenceEndRequested_) {
                 lastTapValid_ = false;
                 requestPause(preferences, nowMs);
-                return;
+                return Action::None;
             }
             if (doubleTap(touch.x, touch.y, nowMs))
                 requestPause(preferences, nowMs);
-            return;
+            return Action::None;
         }
 
         if (touchIntent_ == TouchIntent::None && !ended && held && tapLike && !pagePreview_) {
             lastTapValid_ = false;
             touchIntent_ = TouchIntent::PlayHold;
             start(nowMs, false);
-            return;
+            return Action::None;
         }
         if (touchIntent_ == TouchIntent::None) {
             if (absX >= kSwipeThreshold && absX > absY + kAxisBias) {
@@ -883,16 +939,16 @@ namespace screens {
                 ui.invalidate();
                 ReadingProgress::save(session, preferences, true, nowMs);
             }
-            return;
+            return Action::None;
         }
         if (touchIntent_ == TouchIntent::Wpm) {
             if (!ended)
-                return;
+                return Action::None;
             resetTouch();
             ReadingLoop::adjustWpm(settings_, deltaY < 0 ? 1 : -1);
             settingsStore.acceptChanges();
             wpmFeedbackUntilMs_ = nowMs + kWpmFeedbackMs;
-            return;
+            return Action::None;
         }
         if (touchIntent_ == TouchIntent::Paragraph) {
             if (!ended)
@@ -902,24 +958,25 @@ namespace screens {
                 ui.invalidate();
                 ReadingProgress::save(session, preferences, true, nowMs);
             }
-            return;
+            return Action::None;
         }
         if (!ended)
-            return;
+            return Action::None;
 
         resetTouch();
         if (!tapLike) {
             lastTapValid_ = false;
-            return;
+            return Action::None;
         }
         if (pagePreview_) {
             lastTapValid_ = false;
             pagePreview_ = false;
-            return;
+            return Action::None;
         }
         const bool footerTapped =
             session.metadata.writingMode == WritingMode::verticalRl
                 ? ui::contains(ui::rotateClockwise(portraitFooterRect(height_), height_), touch.x, touch.y)
+            : deckMode ? ui::contains(controlLayout.progress, touch.x, touch.y)
                 : [&] {
                       const uint16_t width = std::min<uint16_t>(220, static_cast<uint16_t>(width_ / 2));
                       return touch.y >= static_cast<uint16_t>(std::max<int16_t>(0, height_ - 40))
@@ -930,7 +987,14 @@ namespace screens {
             settings_.footerMetric = settings::cycleEnum(settings_.footerMetric);
             settingsStore.acceptChanges();
             lastTapValid_ = false;
-            return;
+            return Action::None;
+        }
+        if (deckMode) {
+            // The word itself is the largest play target; the rewind zone moved to its own button.
+            lastTapValid_ = false;
+            if (ui::contains(readerLayout::readingArea(width_, height_, false), touch.x, touch.y))
+                start(nowMs, true);
+            return Action::None;
         }
         if (previousSentenceTapped(touch.x, touch.y)) {
             lastTapValid_ = false;
@@ -938,10 +1002,11 @@ namespace screens {
             pauseAtSentenceEndRequested_ = false;
             playLocked_ = false;
             ReadingProgress::save(session, preferences, true, nowMs);
-            return;
+            return Action::None;
         }
         if (doubleTap(touch.x, touch.y, nowMs))
             start(nowMs, true);
+        return Action::None;
     }
 
     void ReaderScreen::toggle(Preferences& preferences, uint32_t nowMs) {
@@ -1030,6 +1095,7 @@ namespace screens {
     void ReaderScreen::resetTouch() {
         touching_ = false;
         touchIntent_ = TouchIntent::None;
+        pressedControl_ = readerLayout::Control::None;
         scrubSteps_ = 0;
         paragraphTickMs_ = 0;
         paragraphRemainder_ = 0;

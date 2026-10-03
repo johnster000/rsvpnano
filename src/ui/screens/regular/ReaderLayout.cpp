@@ -1,15 +1,114 @@
 #include "ui/screens/ReaderLayout.h"
 #include "fonts/RFont4Format.h"
 
+#include <algorithm>
+
 namespace screens::readerLayout {
+    namespace {
+        constexpr int16_t kInfoHeight = 36;
+        constexpr int16_t kBarBottomMargin = 4;
+        constexpr int16_t kEdge = 8;
+        constexpr int16_t kGap = 8;
+        constexpr int16_t kSingleRowMinimumWidth = 560;
+
+        // Denser square panels need taller targets for the same physical size as the 172 px LCD.
+        int16_t barHeight(int16_t height) {
+            // Even heights keep AMOLED two-row paint alignment from widening the bar into the word area.
+            return std::clamp<int16_t>(static_cast<int16_t>((height / 6) & ~1), 46, 76);
+        }
+
+        int16_t barRows(int16_t width) {
+            return width >= kSingleRowMinimumWidth ? 1 : 2;
+        }
+
+        int16_t barTop(int16_t width, int16_t height) {
+            const int16_t rows = barRows(width);
+            return static_cast<int16_t>(height - kBarBottomMargin - barHeight(height) * rows - kGap * (rows - 1));
+        }
+    } // namespace
+
     size_t pageStrikeIndex() {
         return RFont4::kCompactStrikeIndex;
     }
     ui::Rect readingArea(int16_t width, int16_t height, bool verticalPage) {
-        const int16_t left = verticalPage ? portraitTopStrip(height).h : 0;
-        const int16_t right = verticalPage ? portraitBottomStrip(height, width).h : 0;
+        if (!verticalPage) {
+            // Stop above the paused control bar so word repaints never overwrite it.
+            return {0, kInfoHeight, width,
+                    static_cast<int16_t>(std::max<int>(0, barTop(width, height) - 2 - kInfoHeight))};
+        }
+        const int16_t left = portraitTopStrip(height).h;
+        const int16_t right = portraitBottomStrip(height, width).h;
         return {left, 36, static_cast<int16_t>(std::max<int>(0, width - left - right)),
                 static_cast<int16_t>(std::max<int>(0, height - 72))};
+    }
+
+    Controls controls(int16_t width, int16_t height, bool leftHanded) {
+        Controls result;
+        const auto chrome = horizontalChrome(width, height, leftHanded);
+        result.info = {0, 0, width, kInfoHeight};
+        result.battery = chrome.battery;
+        const int16_t progressWidth = std::min<int16_t>(108, static_cast<int16_t>(width / 5));
+        result.progress = {static_cast<int16_t>(result.battery.x - progressWidth - kGap), 0, progressWidth, 30};
+        result.chapter = {12, 0, static_cast<int16_t>(std::max<int>(0, result.progress.x - kGap - 12)), 30};
+
+        const int16_t rowHeight = barHeight(height);
+        const int16_t scale100 = static_cast<int16_t>(rowHeight * 100 / 46);
+        const auto scaled = [scale100](int16_t base) {
+            return static_cast<int16_t>(base * scale100 / 100);
+        };
+        const int16_t inner = static_cast<int16_t>(width - kEdge * 2);
+        const bool singleRow = barRows(width) == 1;
+        int16_t x = kEdge;
+        int16_t y = barTop(width, height);
+        const auto place = [&](int16_t w) {
+            const ui::Rect rect{x, y, w, rowHeight};
+            x = static_cast<int16_t>(x + w + kGap);
+            return rect;
+        };
+        // Laid out for the right hand, then mirrored so the primary action stays under the reading thumb.
+        ui::Rect menu, rewind, slower, faster, play;
+        if (singleRow) {
+            const int16_t menuWidth = std::min(scaled(112), static_cast<int16_t>(inner * 18 / 100));
+            const int16_t playWidth = std::min(scaled(140), static_cast<int16_t>(inner * 22 / 100));
+            const int16_t stepWidth = std::min(scaled(64), static_cast<int16_t>(inner * 11 / 100));
+            const int16_t speedWidth = std::min(scaled(108), static_cast<int16_t>(inner * 17 / 100));
+            menu = place(menuWidth);
+            rewind = place(stepWidth);
+            const int16_t speedGroup = static_cast<int16_t>(stepWidth * 2 + speedWidth + kGap * 2);
+            const int16_t playX = static_cast<int16_t>(width - kEdge - playWidth);
+            x = static_cast<int16_t>(std::max<int>(x, x + (playX - kGap - x - speedGroup) / 2));
+            slower = place(stepWidth);
+            result.speed = place(speedWidth);
+            faster = place(stepWidth);
+            play = {playX, y, playWidth, rowHeight};
+        } else {
+            // Speed sits above navigation on narrow panels so every target keeps a usable width.
+            const int16_t stepWidth = std::max<int16_t>(rowHeight, static_cast<int16_t>(inner / 4));
+            const int16_t speedWidth = static_cast<int16_t>(inner - stepWidth * 2 - kGap * 2);
+            slower = place(stepWidth);
+            result.speed = place(speedWidth);
+            faster = place(stepWidth);
+            x = kEdge;
+            y = static_cast<int16_t>(y + rowHeight + kGap);
+            const int16_t sideWidth = static_cast<int16_t>((inner - kGap * 2) * 30 / 100);
+            menu = place(sideWidth);
+            rewind = place(static_cast<int16_t>(inner - sideWidth * 2 - kGap * 2));
+            play = place(sideWidth);
+        }
+        result.buttons = {{{Control::Menu, menu},
+                           {Control::Rewind, rewind},
+                           {Control::Slower, slower},
+                           {Control::Faster, faster},
+                           {Control::Play, play}}};
+        if (leftHanded) {
+            const auto mirror = [width](ui::Rect& rect) {
+                rect.x = static_cast<int16_t>(width - rect.x - rect.w);
+            };
+            for (auto& button: result.buttons)
+                mirror(button.rect);
+            mirror(result.speed);
+        }
+        return result;
     }
 
     ui::Rect portraitTopStrip(int16_t width) {
@@ -110,8 +209,48 @@ namespace screens::readerLayout {
                     ui.portraitText(portraitPreviousRect(portraitWidth, portraitHeight, settings.leftHanded), "<<", 2,
                                     ui.color(ui::themes::ColorRole::Muted), ui::TextAlign::Center);
             }
+        } else if (!view.reading && !view.ghostHidden) {
+            pausedControls(ui, view, settings, battery);
         } else {
             horizontalChrome(ui, view, settings, battery);
         }
+    }
+
+    void pausedControls(ui::Context& ui, const Chrome& view, const settings::ReadingSettings& settings,
+                        const Board::Power::BatteryState& battery) {
+        const Controls layout = controls(ui.width(), ui.height(), settings.leftHanded);
+        const auto shown = [&](settings::Visibility visibility) {
+            return settings::visible(visibility, false);
+        };
+        ui.label(layout.chapter, shown(settings.chapterVisibility) ? view.chapter : std::string_view{}, 2,
+                 ui::themes::Muted, ui::TextAlign::Left, 1, view.locale);
+        ui.label(layout.progress, shown(settings.progressVisibility) ? view.footer : std::string_view{}, 2,
+                 ui::themes::Muted, ui::TextAlign::Right);
+        ui.battery(layout.battery, battery.status.percent, battery.charging,
+                   shown(settings.batteryLabelVisibility) ? view.batteryLabel : std::string_view{},
+                   shown(settings.batteryIconVisibility));
+        ui.progress({12, 30, static_cast<int16_t>(ui.width() - 24), 4}, view.percent);
+        for (const ControlButton& button: layout.buttons) {
+            switch (button.control) {
+            case Control::Menu:
+                ui.controlButton(button.rect, ui::Icon::Menu, ui.text(UiText::Menu));
+                break;
+            case Control::Rewind:
+                ui.controlButton(button.rect, ui::Icon::Rewind);
+                break;
+            case Control::Slower:
+                ui.controlButton(button.rect, ui::Icon::Minus);
+                break;
+            case Control::Faster:
+                ui.controlButton(button.rect, ui::Icon::Plus);
+                break;
+            case Control::Play:
+                ui.controlButton(button.rect, ui::Icon::Play, ui.text(UiText::Resume), true);
+                break;
+            case Control::None:
+                break;
+            }
+        }
+        ui.label(layout.speed, view.speed, 2, ui::themes::Accent, ui::TextAlign::Center);
     }
 } // namespace screens::readerLayout

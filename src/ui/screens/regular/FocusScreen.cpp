@@ -207,7 +207,7 @@ namespace screens {
             }
         }
 
-        if (ui.button(backAction, "<<")) {
+        if (detail::back(ui, backAction)) {
             if (deleteConfirm_)
                 deleteConfirm_ = false;
             else

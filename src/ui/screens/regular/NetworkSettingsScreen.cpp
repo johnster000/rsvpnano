@@ -17,7 +17,7 @@ namespace screens {
         constexpr int16_t gap = 4;
         constexpr int16_t backWidth = 56;
         const int16_t rowHeight = static_cast<int16_t>((content.h - gap * 3) / 4);
-        if (ui.button({content.x, content.y, backWidth, rowHeight}, "<<"))
+        if (detail::back(ui, {content.x, content.y, backWidth, rowHeight}))
             screen = Screen::Settings;
         if (ui.setting({static_cast<int16_t>(content.x + backWidth + gap), content.y,
                         static_cast<int16_t>(content.w - backWidth - gap), rowHeight},
@@ -77,7 +77,7 @@ namespace screens {
         constexpr int16_t gap = 4;
         constexpr int16_t backWidth = 56;
         if (scanState_ == WifiScanState::Idle || scanState_ == WifiScanState::Scanning) {
-            if (ui.button({content.x, content.y, backWidth, detail::kBackButtonHeight}, "<<")) {
+            if (detail::back(ui, {content.x, content.y, backWidth, detail::kBackButtonHeight})) {
                 closeWifi();
                 screen = Screen::NetworkSettings;
                 return;
@@ -88,7 +88,7 @@ namespace screens {
             return;
         }
         if (scanState_ == WifiScanState::Failed || networkCount_ == 0) {
-            if (ui.button({content.x, content.y, backWidth, detail::kBackButtonHeight}, "<<")) {
+            if (detail::back(ui, {content.x, content.y, backWidth, detail::kBackButtonHeight})) {
                 closeWifi();
                 screen = Screen::NetworkSettings;
                 return;
@@ -110,7 +110,7 @@ namespace screens {
         const int16_t rowGapTotal = static_cast<int16_t>(gap * (rows - 1));
         const int16_t rowHeight = static_cast<int16_t>((content.h - rowGapTotal) / rows);
         ui::Grid grid{content, columns, rowHeight, gap};
-        if (ui.button(grid.next(), "<<")) {
+        if (detail::back(ui, grid.next())) {
             closeWifi();
             screen = Screen::NetworkSettings;
             return;

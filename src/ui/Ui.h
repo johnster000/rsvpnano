@@ -124,6 +124,13 @@ namespace ui {
         Language,
         Hourglass,
         Power,
+        Menu,
+        Play,
+        Pause,
+        Rewind,
+        Minus,
+        Plus,
+        Back,
     };
 
     enum class TextAlign : uint8_t {
@@ -276,6 +283,8 @@ namespace ui {
         bool button(Rect rect, std::string_view text, bool enabled = true, Icon icon = Icon::None,
                     uint8_t textLines = 1, std::string_view detailLeft = {}, std::string_view detailRight = {});
         bool iconButton(Rect rect, Icon icon);
+        // Icon-led action button; primary buttons are filled with the accent color.
+        bool controlButton(Rect rect, Icon icon, std::string_view text = {}, bool primary = false);
         bool card(Rect rect, std::string_view title, std::string_view detail = {}, uint8_t textSize = 3,
                   ui::themes::ColorRole role = ui::themes::ColorRole::Accent, Icon icon = Icon::None,
                   bool enabled = true, uint8_t alpha = 255);
@@ -427,6 +436,12 @@ namespace ui {
         void drawLanguageIcon(Arduino_GFX& output, Rect rect, uint16_t ink);
         void drawHourglassIcon(Arduino_GFX& output, Rect rect, uint16_t ink);
         void drawPowerIcon(Arduino_GFX& output, Rect rect, uint16_t ink, uint16_t surface);
+        void drawMenuIcon(Arduino_GFX& output, Rect rect, uint16_t ink);
+        void drawPlayIcon(Arduino_GFX& output, Rect rect, uint16_t ink);
+        void drawPauseIcon(Arduino_GFX& output, Rect rect, uint16_t ink);
+        void drawRewindIcon(Arduino_GFX& output, Rect rect, uint16_t ink);
+        void drawSignIcon(Arduino_GFX& output, Rect rect, uint16_t ink, bool plus);
+        void drawBackIcon(Arduino_GFX& output, Rect rect, uint16_t ink);
         void drawBatteryIcon(Arduino_GFX& output, Rect rect, uint8_t percent, bool charging, uint16_t ink,
                              uint16_t surface);
         int valueAt(Rect rect, uint16_t x, int minimum, int maximum, int step) const;

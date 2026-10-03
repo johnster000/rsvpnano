@@ -26,8 +26,78 @@ namespace ui {
         case Icon::Power:
             drawPowerIcon(output, rect, ink, surface);
             break;
+        case Icon::Menu:
+            drawMenuIcon(output, rect, ink);
+            break;
+        case Icon::Play:
+            drawPlayIcon(output, rect, ink);
+            break;
+        case Icon::Pause:
+            drawPauseIcon(output, rect, ink);
+            break;
+        case Icon::Rewind:
+            drawRewindIcon(output, rect, ink);
+            break;
+        case Icon::Minus:
+            drawSignIcon(output, rect, ink, false);
+            break;
+        case Icon::Plus:
+            drawSignIcon(output, rect, ink, true);
+            break;
+        case Icon::Back:
+            drawBackIcon(output, rect, ink);
+            break;
         default:
             break;
+        }
+    }
+
+    void Context::drawMenuIcon(Arduino_GFX& output, Rect rect, uint16_t ink) {
+        const int16_t x = static_cast<int16_t>(rect.x + rect.w / 2 - 9);
+        const int16_t y = static_cast<int16_t>(rect.y + rect.h / 2 - 7);
+        for (int16_t row = 0; row < 3; ++row)
+            output.fillRect(x, static_cast<int16_t>(y + row * 6), 18, 3, ink);
+    }
+
+    void Context::drawPlayIcon(Arduino_GFX& output, Rect rect, uint16_t ink) {
+        const int16_t cx = static_cast<int16_t>(rect.x + rect.w / 2);
+        const int16_t cy = static_cast<int16_t>(rect.y + rect.h / 2);
+        output.fillTriangle(static_cast<int16_t>(cx - 6), static_cast<int16_t>(cy - 9), static_cast<int16_t>(cx - 6),
+                            static_cast<int16_t>(cy + 9), static_cast<int16_t>(cx + 9), cy, ink);
+    }
+
+    void Context::drawPauseIcon(Arduino_GFX& output, Rect rect, uint16_t ink) {
+        const int16_t cx = static_cast<int16_t>(rect.x + rect.w / 2);
+        const int16_t y = static_cast<int16_t>(rect.y + rect.h / 2 - 9);
+        output.fillRect(static_cast<int16_t>(cx - 7), y, 5, 18, ink);
+        output.fillRect(static_cast<int16_t>(cx + 2), y, 5, 18, ink);
+    }
+
+    void Context::drawRewindIcon(Arduino_GFX& output, Rect rect, uint16_t ink) {
+        const int16_t cx = static_cast<int16_t>(rect.x + rect.w / 2);
+        const int16_t cy = static_cast<int16_t>(rect.y + rect.h / 2);
+        output.fillRect(static_cast<int16_t>(cx - 11), static_cast<int16_t>(cy - 8), 3, 17, ink);
+        output.fillTriangle(static_cast<int16_t>(cx - 8), cy, cx, static_cast<int16_t>(cy - 8), cx,
+                            static_cast<int16_t>(cy + 8), ink);
+        output.fillTriangle(cx, cy, static_cast<int16_t>(cx + 8), static_cast<int16_t>(cy - 8),
+                            static_cast<int16_t>(cx + 8), static_cast<int16_t>(cy + 8), ink);
+    }
+
+    void Context::drawSignIcon(Arduino_GFX& output, Rect rect, uint16_t ink, bool plus) {
+        const int16_t cx = static_cast<int16_t>(rect.x + rect.w / 2);
+        const int16_t cy = static_cast<int16_t>(rect.y + rect.h / 2);
+        output.fillRect(static_cast<int16_t>(cx - 8), static_cast<int16_t>(cy - 1), 17, 3, ink);
+        if (plus)
+            output.fillRect(static_cast<int16_t>(cx - 1), static_cast<int16_t>(cy - 8), 3, 17, ink);
+    }
+
+    void Context::drawBackIcon(Arduino_GFX& output, Rect rect, uint16_t ink) {
+        const int16_t cx = static_cast<int16_t>(rect.x + rect.w / 2);
+        const int16_t cy = static_cast<int16_t>(rect.y + rect.h / 2);
+        output.fillRect(static_cast<int16_t>(cx - 7), static_cast<int16_t>(cy - 1), 16, 3, ink);
+        for (int16_t step = 0; step < 7; ++step) {
+            output.fillRect(static_cast<int16_t>(cx - 8 + step), static_cast<int16_t>(cy - step - 1), 3, 3, ink);
+            output.fillRect(static_cast<int16_t>(cx - 8 + step), static_cast<int16_t>(cy + step - 1), 3, 3, ink);
         }
     }
 

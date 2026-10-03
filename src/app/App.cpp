@@ -395,6 +395,10 @@ void App::handleScreenAction(screens::Action action, uint32_t nowMs) {
     case screens::Action::OtaInstall:
         runOtaCheck(true);
         return;
+    case screens::Action::OpenMenu:
+        leaveReader(nowMs);
+        renderScreen(nowMs);
+        return;
     }
 }
 
@@ -426,10 +430,7 @@ void App::handleInput(Input::ActionMask actions, uint32_t nowMs) {
     }
     if (Input::hasAction(actions, Input::ActionOpenMenu)) {
         if (screen_ == screens::Screen::Reader) {
-            ReadingProgress::save(readerScreen_.session, prefs_, true, nowMs);
-            ReadingLoop::pause(readerScreen_.session);
-            libraryScreen_.invalidate();
-            screen_ = screens::Screen::Read;
+            leaveReader(nowMs);
         } else {
             if (companionApi_.active()) {
                 companionApi_.end();
@@ -493,10 +494,7 @@ void App::handleInput(Input::ActionMask actions, uint32_t nowMs) {
             }
             renderScreen(nowMs);
         } else {
-            ReadingProgress::save(readerScreen_.session, prefs_, true, nowMs);
-            ReadingLoop::pause(readerScreen_.session);
-            libraryScreen_.invalidate();
-            screen_ = screens::Screen::Read;
+            leaveReader(nowMs);
             renderScreen(nowMs);
         }
         return;
@@ -521,10 +519,20 @@ void App::handleTouch(uint32_t nowMs) {
     if (companionApi_.active() || usbTransfer_.active() || backgroundJobActive() || screen_ == screens::Screen::Status)
         return;
     if (screen_ == screens::Screen::Reader) {
-        readerScreen_.handleTouch(immediateUi_, nowMs, prefs_, settingsStore_);
+        if (readerScreen_.handleTouch(immediateUi_, nowMs, prefs_, settingsStore_) == screens::Action::OpenMenu) {
+            leaveReader(nowMs);
+            renderScreen(nowMs);
+        }
     } else {
         renderScreen(nowMs);
     }
+}
+
+void App::leaveReader(uint32_t nowMs) {
+    ReadingProgress::save(readerScreen_.session, prefs_, true, nowMs);
+    ReadingLoop::pause(readerScreen_.session);
+    libraryScreen_.invalidate();
+    screen_ = screens::Screen::Read;
 }
 
 void App::showTransientStatus(std::string_view title, std::string_view line1, std::string_view line2,
