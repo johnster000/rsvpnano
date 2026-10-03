@@ -27,6 +27,7 @@ namespace screens {
         constexpr uint32_t kDoubleTapWindowMs = 520;
         constexpr uint32_t kWpmFeedbackMs = 900;
         constexpr int kMaxScrubSteps = 96;
+        constexpr uint32_t kPlaybackMirrorIntervalMs = 120'000;
         constexpr int32_t kParagraphScrollScale = 1'000'000;
         constexpr int32_t kMaximumParagraphRate = 5'000;
         constexpr size_t kPhantomBeforeTargets[] = {64, 96, 144};
@@ -787,7 +788,7 @@ namespace screens {
             ReadingLoop::rewindSentence(session);
             pauseAtSentenceEndRequested_ = false;
             playLocked_ = false;
-            ReadingProgress::save(session, preferences, true, nowMs);
+            persistPosition(preferences, nowMs);
             break;
         case readerLayout::Control::Slower:
         case readerLayout::Control::Faster:
@@ -891,7 +892,7 @@ namespace screens {
                 ReadingLoop::pause(session);
                 pauseAtSentenceEndRequested_ = false;
                 playLocked_ = false;
-                ReadingProgress::save(session, preferences, true, nowMs);
+                persistPosition(preferences, nowMs);
                 return Action::None;
             }
             if (deckMode || playLocked_ || pauseAtSentenceEndRequested_) {
@@ -937,7 +938,7 @@ namespace screens {
             if (ended) {
                 resetTouch();
                 ui.invalidate();
-                ReadingProgress::save(session, preferences, true, nowMs);
+                persistPosition(preferences, nowMs);
             }
             return Action::None;
         }
@@ -956,7 +957,7 @@ namespace screens {
             else {
                 resetTouch();
                 ui.invalidate();
-                ReadingProgress::save(session, preferences, true, nowMs);
+                persistPosition(preferences, nowMs);
             }
             return Action::None;
         }
@@ -1001,7 +1002,7 @@ namespace screens {
             ReadingLoop::rewindSentence(session);
             pauseAtSentenceEndRequested_ = false;
             playLocked_ = false;
-            ReadingProgress::save(session, preferences, true, nowMs);
+            persistPosition(preferences, nowMs);
             return Action::None;
         }
         if (doubleTap(touch.x, touch.y, nowMs))
@@ -1034,13 +1035,17 @@ namespace screens {
 #else
         const size_t previousIndex = session.state.wordIndex;
         if (ReadingLoop::update(session, settings_, nowMs)) {
-            ReadingProgress::saveChapterTransition(session, preferences, store, previousIndex, session.state.wordIndex,
-                                                   nowMs);
+            if (ReadingProgress::saveChapterTransition(session, preferences, store, previousIndex,
+                                                       session.state.wordIndex, nowMs))
+                lastMirrorMs_ = nowMs;
+            else if (nowMs - lastMirrorMs_ >= kPlaybackMirrorIntervalMs)
+                persistPosition(preferences, nowMs); // Bound what a crash or flat battery can lose mid-chapter.
         }
 #endif
     }
 
     void ReaderScreen::start(uint32_t nowMs, bool locked) {
+        lastMirrorMs_ = nowMs;
         pagePreview_ = false;
         playLocked_ = locked;
         pauseAtSentenceEndRequested_ = false;
@@ -1074,7 +1079,14 @@ namespace screens {
         ReadingLoop::pause(session);
         pauseAtSentenceEndRequested_ = false;
         playLocked_ = false;
+        persistPosition(preferences, nowMs);
+    }
+
+    void ReaderScreen::persistPosition(Preferences& preferences, uint32_t nowMs) {
+        // NVS only remembers which book is open; the word position lives in the book's SD sidecar.
         ReadingProgress::save(session, preferences, true, nowMs);
+        ReadingProgress::mirror(session, store);
+        lastMirrorMs_ = nowMs;
     }
 
     bool ReaderScreen::doubleTap(uint16_t x, uint16_t y, uint32_t nowMs) {

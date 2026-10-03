@@ -92,6 +92,7 @@ namespace screens {
         void requestPause(Preferences& preferences, uint32_t nowMs);
         bool shouldFinishPause(uint32_t nowMs) const;
         void finishPause(Preferences& preferences, uint32_t nowMs);
+        void persistPosition(Preferences& preferences, uint32_t nowMs);
         size_t fontChoice(size_t wordIndex) const;
         size_t fontChoice(size_t wordIndex, const settings::ReadingSettings& settings,
                           const settings::ReadingOverrides& overrides) const;
@@ -134,6 +135,7 @@ namespace screens {
         uint32_t wpmFeedbackUntilMs_ = 0;
         bool playLocked_ = false;
         bool pauseAtSentenceEndRequested_ = false;
+        uint32_t lastMirrorMs_ = 0;
         PageReader::State pageState_;
         ReadingLoop::TextParagraph rsvpParagraph_;
         BidiText::Analysis rsvpBidi_;

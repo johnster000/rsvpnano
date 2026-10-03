@@ -529,8 +529,9 @@ void App::handleTouch(uint32_t nowMs) {
 }
 
 void App::leaveReader(uint32_t nowMs) {
-    ReadingProgress::save(readerScreen_.session, prefs_, true, nowMs);
     ReadingLoop::pause(readerScreen_.session);
+    ReadingProgress::save(readerScreen_.session, prefs_, true, nowMs);
+    ReadingProgress::mirror(readerScreen_.session, readerScreen_.store);
     libraryScreen_.invalidate();
     screen_ = screens::Screen::Read;
 }
