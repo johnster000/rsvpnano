@@ -66,7 +66,7 @@ jobs:
         run: >-
           pio test -e native_test -e native_watch_test -e native_board_test
           -e native_light_sleep_test -e native_amoled_test
-          -e native_amoled_241_v1_test -e native_amoled_241_v2_test
+          -e native_amoled_241_v1_test -e native_amoled_241_v2_test -e native_audiobook_test
 
       - name: Check native Arduino_GFX text strip rendering
         run: python test/native_canvas/run.py --fetch-library
