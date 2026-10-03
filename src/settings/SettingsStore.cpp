@@ -1,4 +1,6 @@
 #include "settings/SettingsStore.h"
+
+#include <algorithm>
 #include <esp_log.h>
 
 #include <Arduino.h>
@@ -18,6 +20,8 @@ namespace settings {
         constexpr char kFileHashKey[] = "file_hash";
         constexpr char kSecretsKey[] = "secrets";
         constexpr uint32_t kPersistenceDelayMs = 1500;
+        constexpr uint32_t kPersistenceRetryMs = 5000;
+        constexpr uint32_t kPersistenceRetryMaxMs = 60000;
 
         SettingsError error(SettingsErrorCategory category, SettingsSource source, std::string message,
                             std::string path = {}) {
@@ -211,9 +215,17 @@ namespace settings {
     }
 
     void SettingsStore::update(uint32_t nowMs) {
-        if ((dirty_ || secretsDirty_) && nowMs - dirtyAtMs_ >= kPersistenceDelayMs) {
-            if (auto result = flush(); !result)
-                ESP_LOGE("settings", "persistence failed: %s", result.error().message.c_str());
+        if ((dirty_ || secretsDirty_) && nowMs - dirtyAtMs_ >= kPersistenceDelayMs + retryDelayMs_) {
+            if (auto result = flush(); !result) {
+                // Back off: a failing card must not rewrite the NVS copy on every loop.
+                dirtyAtMs_ = nowMs;
+                retryDelayMs_ = std::min(retryDelayMs_ == 0 ? kPersistenceRetryMs : retryDelayMs_ * 2,
+                                         kPersistenceRetryMaxMs);
+                ESP_LOGE("settings", "persistence failed, retrying in %lu ms: %s",
+                         static_cast<unsigned long>(retryDelayMs_), result.error().message.c_str());
+            } else {
+                retryDelayMs_ = 0;
+            }
         }
     }
 

@@ -59,6 +59,7 @@ namespace settings {
         bool dirty_ = false;
         bool secretsDirty_ = false;
         uint32_t dirtyAtMs_ = 0;
+        uint32_t retryDelayMs_ = 0;
     };
 
 } // namespace settings
