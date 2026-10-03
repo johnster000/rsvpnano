@@ -179,6 +179,8 @@ namespace screens {
                 changed = true;
             }
         }
+        if (changed)
+            ++typographyRevision_; // Page layouts cache measurements per revision.
         return changed;
     }
 } // namespace screens
