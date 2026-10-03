@@ -20,6 +20,7 @@
 #include "ui/Ui.h"
 #include "ui/screens/ChaptersScreen.h"
 #include "ui/screens/PageReaderScreen.h"
+#include "ui/screens/ScreenCommon.h"
 #include "ui/screens/Screens.h"
 
 namespace {
@@ -1712,6 +1713,41 @@ void test_paused_reader_controls_are_reachable_and_clear_of_the_word() {
     }
 }
 
+void test_square_regular_menus_reach_every_tab_and_power() {
+    struct Size {
+        uint16_t width;
+        uint16_t height;
+    };
+    constexpr std::array destinations{screens::Screen::Read, screens::Screen::Settings, screens::Screen::Device,
+                                      screens::Screen::FocusTimers};
+    for (const Size size: {Size{480, 480}, Size{600, 450}}) {
+        for (size_t i = 0; i <= destinations.size(); ++i) {
+            Arduino_GFX gfx(static_cast<int16_t>(size.width), static_cast<int16_t>(size.height));
+            ui::Context context(gfx);
+            context.setTheme(theme());
+            context.setTouchSource({.surface = {size.width, size.height}, .poll = &pollTouch});
+            auto screen = screens::Screen::Library;
+            const uint16_t x = i < destinations.size() ? static_cast<uint16_t>((size.width - 48) * (2 * i + 1) / 8)
+                                                       : static_cast<uint16_t>(size.width - 26);
+            screens::Action action = screens::Action::None;
+            for (const bool down: {true, false}) {
+                gTouchResult = ui::TouchSampleResult::Contact;
+                gContact = {down, x, 24};
+                context.pollTouch(down ? 100 : 130);
+                context.beginFrame(0);
+                action = screens::detail::navigation(context, screens::Screen::Library, screen);
+                context.endFrame();
+            }
+            if (i < destinations.size())
+                TEST_ASSERT_EQUAL(destinations[i], screen);
+            else
+                TEST_ASSERT_EQUAL(screens::Action::PowerOff, action);
+            const auto content = screens::detail::tabContent(context);
+            TEST_ASSERT_GREATER_OR_EQUAL(48, content.y);
+        }
+    }
+}
+
 void test_paused_reader_controls_draw_inside_the_lcd() {
     BoundsRecordingGfx gfx(640, 172);
     ui::Context context(gfx);
@@ -1789,6 +1825,7 @@ int main(int, char**) {
     RUN_TEST(test_appearance_controls_fit_lcd);
     RUN_TEST(test_paused_reader_controls_are_reachable_and_clear_of_the_word);
     RUN_TEST(test_paused_reader_controls_draw_inside_the_lcd);
+    RUN_TEST(test_square_regular_menus_reach_every_tab_and_power);
     RUN_TEST(appearanceChecks::fourRotaries);
     RUN_TEST(appearanceChecks::wordTargets);
     RUN_TEST(appearanceChecks::batteryAndArrowRedraw);
