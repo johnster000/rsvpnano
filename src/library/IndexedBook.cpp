@@ -258,6 +258,10 @@ namespace IndexedBook {
 
             line_ += character;
             if (line_.size() >= RsvpText::kMaxBookLineChars) {
+                // Keep words and multibyte characters whole: the tail after the break starts the next line.
+                const size_t split = RsvpText::longLineBreak(line_);
+                std::string carry = line_.substr(split);
+                line_.resize(split);
                 if (!processLine(line_)) {
                     line_.clear();
                     if (error_)
@@ -268,7 +272,7 @@ namespace IndexedBook {
                     break;
                 }
                 ++stats_.longLineSplits;
-                line_.clear();
+                line_ = std::move(carry);
             }
         }
         yield();
@@ -323,8 +327,9 @@ namespace IndexedBook {
         for (const ChapterMarker& chapter: metadata_.chapters) {
             ChapterRecord record;
             record.wordIndex = static_cast<uint32_t>(chapter.wordIndex);
-            record.titleLength = std::min<uint32_t>(chapter.title.size(), sizeof(record.title));
-            std::ranges::copy_n(chapter.title.begin(), record.titleLength, record.title);
+            const std::string_view title = Utf8Text::prefix(chapter.title, sizeof(record.title));
+            record.titleLength = static_cast<uint32_t>(title.size());
+            std::ranges::copy_n(title.begin(), record.titleLength, record.title);
             if (auto written = indexWriter_.write(&record, sizeof(record)); !written)
                 return fail(written.error(), "SD write failed");
         }

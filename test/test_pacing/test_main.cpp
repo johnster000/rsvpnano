@@ -1,6 +1,7 @@
 #include <unity.h>
 #include <vector>
 
+#include "library/IndexedBookStore.h"
 #include "reader/ReadingLoop.h"
 #include "text/RsvpTokenizer.h"
 #include "text/UnicodeText.h"
@@ -498,8 +499,33 @@ void test_word_at_returns_correct_word(void) {
 // Main
 // ---------------------------------------------------------------------------
 
+void test_long_lines_break_between_words_and_characters(void) {
+    TEST_ASSERT_EQUAL(6, RsvpText::longLineBreak("alpha betagam"));
+    TEST_ASSERT_EQUAL(6, RsvpText::longLineBreak("alpha\tbeta"));
+    // Without spaces, the final character moves to the next line even when only partly read.
+    TEST_ASSERT_EQUAL(3, RsvpText::longLineBreak("abc\xE6\x97"));
+    TEST_ASSERT_EQUAL(3, RsvpText::longLineBreak("\xE6\x97\xA5\xE6\x9C\xAC"));
+    // A lone leading space or unbreakable bytes never carry the whole line forward.
+    TEST_ASSERT_EQUAL(4, RsvpText::longLineBreak(" abcd"));
+    TEST_ASSERT_EQUAL(3, RsvpText::longLineBreak("\x80\x80\x80"));
+}
+
+void test_sentence_end_survives_store_cache_reload(void) {
+    // Looking ahead at the next word replaces the store's buffer; the abbreviation check must not see it.
+    IndexedBookStore store;
+    store.words = {"Dr.", "Who"};
+    ReadingSession session;
+    session.bookStore = &store;
+    TEST_ASSERT_FALSE(ReadingLoop::currentWordEndsSentence(session));
+    store.words = {"Fine.", "Who"};
+    TEST_ASSERT_TRUE(ReadingLoop::currentWordEndsSentence(session));
+}
+
 int main(void) {
     UNITY_BEGIN();
+
+    RUN_TEST(test_sentence_end_survives_store_cache_reload);
+    RUN_TEST(test_long_lines_break_between_words_and_characters);
 
     RUN_TEST(test_wpm_base_interval);
     RUN_TEST(test_cjk_phrases_use_characters_per_minute);

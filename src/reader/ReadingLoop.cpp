@@ -844,8 +844,11 @@ namespace ReadingLoop {
             case '!':
             case '?':
                 return true;
-            case '.':
-                return !looksLikeAbbreviation(word, nextWordStartsLowercaseAt(session, wordIndex));
+            case '.': {
+                // Reading the next word can replace the store's cache window, so fetch this word again afterwards.
+                const bool nextLowercase = nextWordStartsLowercaseAt(session, wordIndex);
+                return !looksLikeAbbreviation(wordAt(session, wordIndex), nextLowercase);
+            }
             default:
                 return false;
             }

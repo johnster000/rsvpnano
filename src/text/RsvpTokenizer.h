@@ -28,6 +28,16 @@ namespace RsvpText {
 
     bool hasReadableText(std::string_view text);
 
+    // Where an over-long line should break: after its last space or tab, otherwise before its final
+    // (possibly incomplete) UTF-8 character. Bytes from the result onward begin the next line.
+    inline size_t longLineBreak(std::string_view line) {
+        const size_t space = line.find_last_of(" \t");
+        if (space != std::string_view::npos && space > 0)
+            return space + 1;
+        const size_t character = Utf8Text::lastCodepointStart(line);
+        return character == 0 ? line.size() : character;
+    }
+
     namespace Detail {
 
         bool isWordBoundary(char c);
