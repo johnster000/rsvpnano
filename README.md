@@ -91,7 +91,8 @@ the device's OTA flow.
 | Waveshare ESP32-S3 Touch AMOLED 2.41 V2 | `waveshare_esp32s3_touch_amoled_241_v2` | Web installer, OTA, source; hardware validation pending |
 | Waveshare ESP32-C6 Touch LCD 1.47 | `waveshare_esp32c6_touch_lcd_147` | Web installer, OTA, source |
 
-Most LCD 3.49 readers use rev1. Try rev2 when the display works but backlight control does not.
+Most LCD 3.49 readers use rev1. Try rev2 when the display works but backlight control does not,
+for example when the screen stays dark and only lights up while RESET is held.
 
 For AMOLED 2.41, choose V2 only for a Rev2.0 PCB or V2 QC label. Reset/interrupt wiring
 is different; V1 and V2 firmware are not interchangeable. Both use the regular UI.

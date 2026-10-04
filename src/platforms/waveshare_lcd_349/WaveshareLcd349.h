@@ -86,5 +86,6 @@ namespace WaveshareLcd349::TouchWiring {
     constexpr uint8_t kAddress = 0x3B;
     constexpr bool kReleaseBusBeforeRead = false;
     constexpr uint32_t kReadyPollIntervalMs = 5;
-    constexpr uint32_t kPollIntervalMs = 30;
+    // Packet reads while a finger is down; 15 ms keeps release and drag latency near one display frame.
+    constexpr uint32_t kPollIntervalMs = 15;
 } // namespace WaveshareLcd349::TouchWiring

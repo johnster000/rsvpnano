@@ -131,6 +131,8 @@ namespace ui {
         Minus,
         Plus,
         Back,
+        Up,
+        Down,
     };
 
     enum class TextAlign : uint8_t {
@@ -284,7 +286,8 @@ namespace ui {
                     uint8_t textLines = 1, std::string_view detailLeft = {}, std::string_view detailRight = {});
         bool iconButton(Rect rect, Icon icon);
         // Icon-led action button; primary buttons are filled with the accent color.
-        bool controlButton(Rect rect, Icon icon, std::string_view text = {}, bool primary = false);
+        // `held` shows the pressed look for touches a screen tracks itself.
+        bool controlButton(Rect rect, Icon icon, std::string_view text = {}, bool primary = false, bool held = false);
         bool card(Rect rect, std::string_view title, std::string_view detail = {}, uint8_t textSize = 3,
                   ui::themes::ColorRole role = ui::themes::ColorRole::Accent, Icon icon = Icon::None,
                   bool enabled = true, uint8_t alpha = 255);
@@ -442,10 +445,14 @@ namespace ui {
         void drawRewindIcon(Arduino_GFX& output, Rect rect, uint16_t ink);
         void drawSignIcon(Arduino_GFX& output, Rect rect, uint16_t ink, bool plus);
         void drawBackIcon(Arduino_GFX& output, Rect rect, uint16_t ink);
+        void drawChevronIcon(Arduino_GFX& output, Rect rect, uint16_t ink, bool up);
         void drawBatteryIcon(Arduino_GFX& output, Rect rect, uint8_t percent, bool charging, uint16_t ink,
                              uint16_t surface);
         int valueAt(Rect rect, uint16_t x, int minimum, int maximum, int step) const;
         bool tapped(size_t slot, Rect rect, bool enabled = true);
+        bool pressed(size_t slot) const {
+            return touchActive_ && capturedSlot_ == slot;
+        }
         bool sliderValue(Rect rect, std::string_view label, int& value, int minimum, int maximum, int step,
                          std::string_view suffix, ui::themes::ColorRole activeRole);
         bool stepperValue(Rect rect, std::string_view label, int& value, int minimum, int maximum, int step,

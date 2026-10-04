@@ -122,6 +122,7 @@ namespace screens {
         bool touching_ = false;
         uint8_t appearancePage_ = 0;
         uint8_t appearanceDialPage_ = 0;
+        uint32_t touchStartMs_ = 0;
         uint16_t touchStartX_ = 0;
         uint16_t touchStartY_ = 0;
         size_t touchStartWord_ = 0;

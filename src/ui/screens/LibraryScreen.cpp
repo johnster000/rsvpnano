@@ -5,6 +5,9 @@
 #include "logging/Logger.h"
 #include "storage/fs/StoragePaths.h"
 #include "library/IndexedBook.h"
+#include "library/ReadingProgress.h"
+#include "library/StorageManager.h"
+#include "reader/ReadingLoop.h"
 #include "ui/screens/ScreenCommon.h"
 
 namespace screens {
@@ -12,7 +15,8 @@ namespace screens {
         carouselGesture_ = {};
         dragging_ = false;
         moved_ = false;
-        offset_ = 0;
+        pressedRow_ = SIZE_MAX;
+        scrollToCurrent_ = true;
     }
 
     void LibraryScreen::invalidate() {
@@ -25,6 +29,8 @@ namespace screens {
         const size_t bookCount = storage.books().size();
         if (itemsValid_ && items_.size() == bookCount) {
             const int activeIndex = storage.findBook(session.sourcePath());
+            for (size_t index = 0; index < items_.size(); ++index)
+                items_[index].current = static_cast<int>(index) == activeIndex;
             if (activeIndex >= 0 && static_cast<size_t>(activeIndex) < items_.size()) {
                 LibraryItem& current = items_[static_cast<size_t>(activeIndex)];
                 current.progress = ReadingProgress::percent(session.state.wordIndex, ReadingLoop::wordCount(session));
@@ -47,6 +53,7 @@ namespace screens {
             bool hasPosition = false;
 
             if (session.sourcePath() == book.path) {
+                item.current = true;
                 wordIndex = static_cast<uint32_t>(session.state.wordIndex);
                 item.progress = ReadingProgress::percent(wordIndex, ReadingLoop::wordCount(session));
                 if (const ChapterMarker* chapter = session.metadata.chapterAt(wordIndex))

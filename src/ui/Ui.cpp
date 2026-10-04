@@ -334,8 +334,11 @@ namespace ui {
     bool Context::setting(Rect rect, std::string_view label, std::string_view value, SettingLayout layout) {
         rect = paintBounds(rect);
         const size_t slot = nextSlot_;
+        const bool activated = tapped(slot, rect);
+        const bool down = pressed(slot);
         uint32_t state = signature(value, signature(label));
         state = combine(state, static_cast<uint8_t>(layout));
+        state = combine(state, down);
         if (claim(Kind::Setting, rect, state).changed) {
             TextLayout labelText, valueText;
             const int16_t textWidth = std::max<int16_t>(0, static_cast<int16_t>(rect.w - 14));
@@ -362,30 +365,36 @@ namespace ui {
                                 largeValue ? 2 : 1, TextAlign::Start, !largeValue && rect.h >= 32 ? 2 : 1);
             }
             paint(rect, [&](Arduino_GFX& output, Rect rect) {
-                const uint16_t surface = color(ui::themes::ColorRole::SurfaceMuted);
+                const uint16_t surface = color(down ? themes::SurfaceActive : themes::SurfaceMuted);
                 output.fillRoundRect(rect.x, rect.y, rect.w, rect.h, 5, surface);
-                output.drawRoundRect(rect.x, rect.y, rect.w, rect.h, 5, color(ui::themes::ColorRole::Outline));
+                output.drawRoundRect(rect.x, rect.y, rect.w, rect.h, 5, color(down ? themes::Accent : themes::Outline));
                 drawText(output, labelText, color(layout == SettingLayout::Inline ? themes::Foreground : themes::Muted),
                          rect.x, rect.y);
                 drawText(output, valueText, color(themes::Accent), rect.x, rect.y);
             });
         }
-        return tapped(slot, rect);
+        return activated;
     }
 
     bool Context::toggle(Rect rect, std::string_view label, bool& enabled) {
         rect = paintBounds(rect);
         const size_t slot = nextSlot_;
+        // Flip before claiming so the switch shows its new position in the same frame.
+        const bool activated = tapped(slot, rect);
+        if (activated)
+            enabled = !enabled;
+        const bool down = pressed(slot);
         uint32_t state = combine(signature(label), enabled);
+        state = combine(state, down);
         if (claim(Kind::Toggle, rect, state).changed) {
             constexpr int16_t switchWidth = 34;
             const auto labelText =
                 prepareText({7, 0, static_cast<int16_t>(std::max<int16_t>(0, rect.w - switchWidth - 21)), rect.h},
                             label, 2);
             paint(rect, [&](Arduino_GFX& output, Rect rect) {
-                const uint16_t surface = color(ui::themes::ColorRole::SurfaceMuted);
+                const uint16_t surface = color(down ? themes::SurfaceActive : themes::SurfaceMuted);
                 output.fillRoundRect(rect.x, rect.y, rect.w, rect.h, 5, surface);
-                output.drawRoundRect(rect.x, rect.y, rect.w, rect.h, 5, color(ui::themes::ColorRole::Outline));
+                output.drawRoundRect(rect.x, rect.y, rect.w, rect.h, 5, color(down ? themes::Accent : themes::Outline));
                 const int16_t switchX = static_cast<int16_t>(rect.x + rect.w - switchWidth - 7);
                 const int16_t switchY = static_cast<int16_t>(rect.y + (rect.h - 16) / 2);
                 output.fillRoundRect(switchX, switchY, switchWidth, 16, 8,
@@ -396,10 +405,7 @@ namespace ui {
                 drawText(output, labelText, color(themes::Foreground), rect.x, rect.y);
             });
         }
-        if (!tapped(slot, rect))
-            return false;
-        enabled = !enabled;
-        return true;
+        return activated;
     }
 
     bool Context::tap(Rect rect, bool enabled) {
@@ -414,8 +420,10 @@ namespace ui {
         rect = paintBounds(rect);
         const size_t slot = nextSlot_;
         const bool activated = tapped(slot, rect, enabled);
+        const bool down = pressed(slot);
         uint32_t state = combine(signature(text), enabled);
         state = combine(state, static_cast<uint8_t>(icon));
+        state = combine(state, down);
         state = combine(state, textLines);
         state = signature(detailLeft, state);
         state = signature(detailRight, state);
@@ -443,11 +451,12 @@ namespace ui {
                 }
             }
             paint(rect, [&](Arduino_GFX& output, Rect rect) {
-                const uint16_t surface = color(ui::themes::ColorRole::SurfaceMuted);
+                const uint16_t surface = color(down ? themes::SurfaceActive : themes::SurfaceMuted);
                 output.fillRoundRect(rect.x, rect.y, rect.w, rect.h, 5, surface);
                 output.drawRoundRect(rect.x, rect.y, rect.w, rect.h, 5,
-                                     color(enabled ? ui::themes::ColorRole::Outline
-                                                   : ui::themes::ColorRole::ProgressTrack));
+                                     color(down      ? ui::themes::ColorRole::Accent
+                                           : enabled ? ui::themes::ColorRole::Outline
+                                                     : ui::themes::ColorRole::ProgressTrack));
                 if (enabled && rect.w > 16 && rect.h >= 28)
                     output.fillRect(static_cast<int16_t>(rect.x + 8), static_cast<int16_t>(rect.y + rect.h - 3),
                                     static_cast<int16_t>(rect.w - 16), 2, color(ui::themes::ColorRole::Accent));
@@ -466,25 +475,28 @@ namespace ui {
         rect = paintBounds(rect);
         const size_t slot = nextSlot_;
         const bool activated = tapped(slot, rect);
-        const uint32_t state = static_cast<uint8_t>(icon);
+        const bool down = pressed(slot);
+        const uint32_t state = combine(static_cast<uint8_t>(icon), down);
         const Claim widget = claim(Kind::Button, rect, state);
         if (widget.changed) {
             paint(rect, [&](Arduino_GFX& output, Rect rect) {
-                const uint16_t surface = color(ui::themes::ColorRole::SurfaceMuted);
+                const uint16_t surface = color(down ? themes::SurfaceActive : themes::SurfaceMuted);
                 output.fillRoundRect(rect.x, rect.y, rect.w, rect.h, 7, surface);
-                output.drawRoundRect(rect.x, rect.y, rect.w, rect.h, 7, color(ui::themes::ColorRole::Outline));
+                output.drawRoundRect(rect.x, rect.y, rect.w, rect.h, 7, color(down ? themes::Accent : themes::Outline));
                 drawIcon(output, rect, icon, color(ui::themes::ColorRole::Muted), surface);
             });
         }
         return activated;
     }
 
-    bool Context::controlButton(Rect rect, Icon icon, std::string_view text, bool primary) {
+    bool Context::controlButton(Rect rect, Icon icon, std::string_view text, bool primary, bool held) {
         rect = paintBounds(rect);
         const size_t slot = nextSlot_;
         const bool activated = tapped(slot, rect);
+        const bool down = held || pressed(slot);
         uint32_t state = combine(signature(text), static_cast<uint8_t>(icon));
         state = combine(state, primary);
+        state = combine(state, down);
         if (claim(Kind::Button, rect, state).changed) {
             constexpr int16_t kIconWidth = 24;
             constexpr int16_t kIconGap = 8;
@@ -498,13 +510,15 @@ namespace ui {
                 static_cast<int16_t>(contentX + (icon == Icon::None ? 0 : kIconWidth + kIconGap));
             const auto label = prepareText({labelX, 0, labelWidth, rect.h}, text, 2, TextAlign::Left);
             paint(rect, [&](Arduino_GFX& output, Rect rect) {
-                const uint16_t surface =
-                    color(primary ? ui::themes::ColorRole::Accent : ui::themes::ColorRole::SurfaceMuted);
+                // Pressed buttons swap to the other surface so a touch shows before the release acts.
+                const uint16_t surface = primary ? (down ? blend(themes::Accent, 150) : color(themes::Accent))
+                                                 : color(down ? themes::SurfaceActive : themes::SurfaceMuted);
                 const uint16_t ink =
                     color(primary ? ui::themes::ColorRole::Background : ui::themes::ColorRole::Foreground);
                 output.fillRoundRect(rect.x, rect.y, rect.w, rect.h, 7, surface);
                 output.drawRoundRect(rect.x, rect.y, rect.w, rect.h, 7,
-                                     color(primary ? ui::themes::ColorRole::Accent : ui::themes::ColorRole::Outline));
+                                     color(primary || down ? ui::themes::ColorRole::Accent
+                                                           : ui::themes::ColorRole::Outline));
                 if (icon != Icon::None)
                     drawIcon(output, {static_cast<int16_t>(rect.x + contentX), rect.y, kIconWidth, rect.h}, icon, ink,
                              surface);
@@ -516,8 +530,12 @@ namespace ui {
 
     bool Context::tab(Rect rect, std::string_view text, bool active, Icon icon) {
         rect = paintBounds(rect);
+        const size_t slot = nextSlot_;
+        const bool activated = tapped(slot, rect);
+        const bool down = pressed(slot);
         uint32_t state = combine(signature(text), active);
         state = combine(state, static_cast<uint8_t>(icon));
+        state = combine(state, down);
         const Claim widget = claim(Kind::Tab, rect, state);
         if (widget.changed) {
             const int16_t iconWidth = icon == Icon::None ? 0 : std::min<int16_t>(26, rect.w / 3);
@@ -525,8 +543,9 @@ namespace ui {
                                             static_cast<int16_t>(rect.w - iconWidth - 12), rect.h},
                                            text, 2, TextAlign::Center);
             paint(rect, [&](Arduino_GFX& output, Rect rect) {
-                const uint16_t surface =
-                    color(active ? ui::themes::ColorRole::Surface : ui::themes::ColorRole::SurfaceMuted);
+                const uint16_t surface = color(down     ? ui::themes::ColorRole::SurfaceActive
+                                               : active ? ui::themes::ColorRole::Surface
+                                                        : ui::themes::ColorRole::SurfaceMuted);
                 output.fillRect(rect.x, rect.y, rect.w, rect.h, surface);
                 output.drawRect(rect.x, rect.y, rect.w, rect.h, color(ui::themes::ColorRole::Outline));
                 if (active) {
@@ -539,7 +558,7 @@ namespace ui {
                 drawText(output, label, ink, rect.x, rect.y);
             });
         }
-        return tapped(widget.index, rect);
+        return activated;
     }
 
     Context::BatteryLayout Context::batteryLayout(Rect rect, std::string_view labelText, bool showIcon) const {
@@ -1449,7 +1468,8 @@ namespace ui {
         if (!hasTouch(*event, TouchRelease) || capturedSlot_ != slot)
             return false;
         capturedSlot_ = kSlotCapacity;
-        return hasTouch(*event, TouchTap);
+        // A deliberate press still counts after the hold threshold; only a drag cancels it.
+        return hasTouch(*event, TouchPress);
     }
 
     void Context::resetTouchGesture() {
@@ -1487,11 +1507,13 @@ namespace ui {
         if (!contact.touched) {
             if (!touchActive_)
                 return false;
-            const bool tapped = !touchHoldEmitted_ && nowMs - touchStartedAtMs_ <= touchSource_.timing.tapMaxDurationMs
-                             && touchOutsideSamples_ < kTapCancelOutsideSamples;
+            const bool still = touchOutsideSamples_ < kTapCancelOutsideSamples;
+            const bool tapped =
+                still && !touchHoldEmitted_ && nowMs - touchStartedAtMs_ <= touchSource_.timing.tapMaxDurationMs;
             touchActive_ = false;
-            touchEvent_ = {static_cast<uint8_t>(TouchRelease | (tapped ? TouchTap : TouchNone)), touchLastX_,
-                           touchLastY_};
+            touchEvent_ = {static_cast<uint8_t>(TouchRelease | (tapped ? TouchTap : TouchNone)
+                                                | (still ? TouchPress : TouchNone)),
+                           touchLastX_, touchLastY_};
             return touchPending_ = true;
         }
 

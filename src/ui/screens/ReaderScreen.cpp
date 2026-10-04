@@ -26,6 +26,8 @@ namespace screens {
         constexpr uint16_t kScrubStep = 22;
         constexpr uint32_t kDoubleTapWindowMs = 520;
         constexpr uint32_t kWpmFeedbackMs = 900;
+        // Long enough for a swipe to leave tap range first, short enough to feel like press-to-read.
+        constexpr uint32_t kHoldToReadMs = 140;
         constexpr int kMaxScrubSteps = 96;
         constexpr uint32_t kPlaybackMirrorIntervalMs = 120'000;
         constexpr int32_t kParagraphScrollScale = 1'000'000;
@@ -741,6 +743,7 @@ namespace screens {
                                                                           cjkPacing, settings),
                                  .speed = speed,
                                  .percent = progress,
+                                 .pressed = pressedControl_,
                              },
                              settings, battery);
     }
@@ -823,12 +826,15 @@ namespace screens {
         const bool controls = deckMode && !session.playing;
 
         if (ended && touchIntent_ == TouchIntent::PlayHold) {
+            // Letting go always stops on the current word; the pause setting applies to hands-free reading.
             resetTouch();
-            requestPause(preferences, nowMs);
+            if (session.playing)
+                finishPause(preferences, nowMs);
             return Action::None;
         }
         if (ui::hasTouch(touch, ui::TouchStart)) {
             touching_ = true;
+            touchStartMs_ = nowMs;
             touchStartX_ = touch.x;
             touchStartY_ = touch.y;
             touchStartWord_ = session.state.wordIndex;
@@ -840,6 +846,9 @@ namespace screens {
         }
         if (!touching_)
             return Action::None;
+        // Holding keeps reading; the toolkit's later hold signal must not count as a second gesture.
+        if (touchIntent_ == TouchIntent::PlayHold)
+            return Action::None;
         if (pressedControl_ != readerLayout::Control::None) {
             // A press that starts on a button belongs to that button, like toolkit buttons: a drag cancels it.
             if (!ended)
@@ -847,7 +856,7 @@ namespace screens {
             const readerLayout::Control pressed = pressedControl_;
             resetTouch();
             lastTapValid_ = false;
-            if (!ui::hasTouch(touch, ui::TouchTap))
+            if (!ui::hasTouch(touch, ui::TouchPress))
                 return Action::None;
             return runControl(pressed, nowMs, preferences, settingsStore);
         }
@@ -905,7 +914,14 @@ namespace screens {
             return Action::None;
         }
 
-        if (touchIntent_ == TouchIntent::None && !ended && held && tapLike && !pagePreview_) {
+        // With on-screen buttons, a still press on the word reads at once; gesture-only layouts keep the long hold.
+        const bool holdToRead =
+            !ended
+            && (deckMode ? nowMs - touchStartMs_ >= kHoldToReadMs
+                               && ui::contains(readerLayout::readingArea(width_, height_, false), touchStartX_,
+                                               touchStartY_)
+                         : held);
+        if (touchIntent_ == TouchIntent::None && holdToRead && tapLike && !pagePreview_) {
             lastTapValid_ = false;
             touchIntent_ = TouchIntent::PlayHold;
             start(nowMs, false);
@@ -991,10 +1007,8 @@ namespace screens {
             return Action::None;
         }
         if (deckMode) {
-            // The word itself is the largest play target; the rewind zone moved to its own button.
+            // Reading is press-and-hold; hands-free reading starts from the Play button.
             lastTapValid_ = false;
-            if (ui::contains(readerLayout::readingArea(width_, height_, false), touch.x, touch.y))
-                start(nowMs, true);
             return Action::None;
         }
         if (previousSentenceTapped(touch.x, touch.y)) {

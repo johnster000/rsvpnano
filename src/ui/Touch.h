@@ -24,6 +24,8 @@ namespace ui {
         TouchRelease = 1U << 2,
         TouchTap = 1U << 3,
         TouchHold = 1U << 4,
+        // Released where it started, however long it was held; buttons activate on this.
+        TouchPress = 1U << 5,
     };
 
     struct Touch {

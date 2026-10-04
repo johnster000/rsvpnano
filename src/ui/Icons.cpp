@@ -47,6 +47,10 @@ namespace ui {
         case Icon::Back:
             drawBackIcon(output, rect, ink);
             break;
+        case Icon::Up:
+        case Icon::Down:
+            drawChevronIcon(output, rect, ink, icon == Icon::Up);
+            break;
         default:
             break;
         }
@@ -98,6 +102,16 @@ namespace ui {
         for (int16_t step = 0; step < 7; ++step) {
             output.fillRect(static_cast<int16_t>(cx - 8 + step), static_cast<int16_t>(cy - step - 1), 3, 3, ink);
             output.fillRect(static_cast<int16_t>(cx - 8 + step), static_cast<int16_t>(cy + step - 1), 3, 3, ink);
+        }
+    }
+
+    void Context::drawChevronIcon(Arduino_GFX& output, Rect rect, uint16_t ink, bool up) {
+        const int16_t cx = static_cast<int16_t>(rect.x + rect.w / 2);
+        const int16_t cy = static_cast<int16_t>(rect.y + rect.h / 2);
+        for (int16_t step = 0; step < 8; ++step) {
+            const int16_t y = static_cast<int16_t>(up ? cy - 5 + step : cy + 4 - step);
+            output.fillRect(static_cast<int16_t>(cx - step - 1), y, 3, 3, ink);
+            output.fillRect(static_cast<int16_t>(cx + step - 1), y, 3, 3, ink);
         }
     }
 

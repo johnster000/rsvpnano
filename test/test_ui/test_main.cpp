@@ -19,6 +19,7 @@
 #include "ui/Localization.h"
 #include "ui/Ui.h"
 #include "ui/screens/ChaptersScreen.h"
+#include "ui/screens/LibraryScreen.h"
 #include "ui/screens/PageReaderScreen.h"
 #include "ui/screens/ScreenCommon.h"
 #include "ui/screens/Screens.h"
@@ -267,8 +268,9 @@ void test_button_and_slider_consume_touch() {
     context.beginFrame(1);
     TEST_ASSERT_FALSE(context.button({0, 0, 80, 24}, "Tap"));
     context.endFrame();
-    TEST_ASSERT_EQUAL(0, gfx.writes);
-    TEST_ASSERT_EQUAL(0, gfx.flushes);
+    // The press acts on release but repaints at once, so the finger sees it landed.
+    TEST_ASSERT_GREATER_THAN(0, gfx.writes);
+    TEST_ASSERT_EQUAL(1, gfx.flushes);
     gContact = {};
     TEST_ASSERT_TRUE(context.pollTouch(2));
     context.beginFrame(1);
@@ -1713,6 +1715,187 @@ void test_paused_reader_controls_are_reachable_and_clear_of_the_word() {
     }
 }
 
+void test_slow_press_still_activates_button_but_drag_off_cancels() {
+    Arduino_GFX gfx;
+    ui::Context context(gfx);
+    enableTouch(context);
+    constexpr ui::Rect button{0, 0, 80, 40};
+
+    gContact = {true, 40, 20};
+    TEST_ASSERT_TRUE(context.pollTouch(1));
+    context.beginFrame(1);
+    TEST_ASSERT_FALSE(context.button(button, "Hold"));
+    context.endFrame();
+    TEST_ASSERT_TRUE(context.pollTouch(900));
+    TEST_ASSERT_TRUE(ui::hasTouch(*context.touch(), ui::TouchHold));
+    context.beginFrame(1);
+    TEST_ASSERT_FALSE(context.button(button, "Hold"));
+    context.endFrame();
+    gContact = {};
+    TEST_ASSERT_TRUE(context.pollTouch(950));
+    TEST_ASSERT_FALSE(ui::hasTouch(*context.touch(), ui::TouchTap));
+    TEST_ASSERT_TRUE(ui::hasTouch(*context.touch(), ui::TouchPress));
+    context.beginFrame(1);
+    TEST_ASSERT_TRUE(context.button(button, "Hold"));
+    context.endFrame();
+
+    gContact = {true, 40, 20};
+    TEST_ASSERT_TRUE(context.pollTouch(1000));
+    context.beginFrame(1);
+    TEST_ASSERT_FALSE(context.button(button, "Hold"));
+    context.endFrame();
+    for (const uint32_t at: {1010U, 1020U}) {
+        gContact = {true, 140, 20};
+        TEST_ASSERT_TRUE(context.pollTouch(at));
+        context.beginFrame(1);
+        TEST_ASSERT_FALSE(context.button(button, "Hold"));
+        context.endFrame();
+    }
+    gContact = {true, 40, 20};
+    TEST_ASSERT_TRUE(context.pollTouch(1030));
+    gContact = {};
+    TEST_ASSERT_TRUE(context.pollTouch(1040));
+    TEST_ASSERT_FALSE(ui::hasTouch(*context.touch(), ui::TouchPress));
+    context.beginFrame(1);
+    TEST_ASSERT_FALSE(context.button(button, "Hold"));
+    context.endFrame();
+
+    gTouchResult = ui::TouchSampleResult::Contact;
+    gContact = {true, 40, 20};
+    TEST_ASSERT_TRUE(context.pollTouch(1100));
+    gTouchResult = ui::TouchSampleResult::Reset;
+    TEST_ASSERT_TRUE(context.pollTouch(1110));
+    TEST_ASSERT_FALSE(ui::hasTouch(*context.touch(), ui::TouchPress));
+}
+
+namespace {
+    struct LibraryFixture {
+        Arduino_GFX gfx{640, 172};
+        ui::Context context{gfx};
+        std::vector<BookLibrary::Entry> books;
+        std::vector<screens::LibraryItem> items;
+        screens::LibraryScreen library;
+        screens::Screen screen = screens::Screen::Library;
+        uint32_t now = 100;
+
+        explicit LibraryFixture(size_t count, size_t current = 0) {
+            context.setTheme(theme());
+            context.setTouchSource({.surface = {640, 172}, .poll = &pollTouch});
+            books.resize(count);
+            for (size_t index = 0; index < count; ++index) {
+                books[index].title = "Book " + std::to_string(index);
+                books[index].author = "Author";
+            }
+            for (size_t index = 0; index < count; ++index)
+                items.push_back({.book = &books[index], .progress = static_cast<uint8_t>(index * 7 % 100),
+                                 .current = index == current});
+            frame();
+        }
+
+        screens::Action frame() {
+            context.beginFrame(static_cast<uint8_t>(screens::Screen::Library));
+            const screens::Action action = library.draw(context, items, now, screen);
+            context.endFrame();
+            return action;
+        }
+
+        screens::Action touch(bool down, uint16_t x, uint16_t y, uint32_t step = 15) {
+            gTouchResult = ui::TouchSampleResult::Contact;
+            gContact = {down, x, y};
+            now += step;
+            if (!context.pollTouch(now))
+                return screens::Action::None;
+            return frame();
+        }
+
+        screens::Action tap(uint16_t x, uint16_t y) {
+            touch(true, x, y);
+            return touch(false, x, y);
+        }
+    };
+
+    // Side-rail content on the 640x172 LCD: three 49 px rows from y 8, scroll column at x 540.
+    constexpr uint16_t kListX = 300;
+    constexpr uint16_t kRowY[] = {32, 85, 138};
+    constexpr uint16_t kScrollX = 566;
+    constexpr uint16_t kUpY = 40;
+    constexpr uint16_t kDownY = 140;
+} // namespace
+
+void test_library_is_a_list_that_opens_the_tapped_book() {
+    LibraryFixture fixture(2);
+    TEST_ASSERT_EQUAL(screens::Action::OpenBook, fixture.tap(kListX, kRowY[1]));
+    TEST_ASSERT_EQUAL(1, fixture.library.selectedIndex());
+    // Short libraries leave the list full width and draw no scroll buttons to tap.
+    TEST_ASSERT_EQUAL(screens::Action::None, fixture.tap(kScrollX, kDownY));
+    TEST_ASSERT_EQUAL(screens::Action::None, fixture.tap(kListX, kRowY[2]));
+}
+
+void test_library_pages_with_buttons_and_follows_drags_by_whole_rows() {
+    LibraryFixture fixture(10);
+    TEST_ASSERT_EQUAL(screens::Action::OpenBook, fixture.tap(kListX, kRowY[0]));
+    TEST_ASSERT_EQUAL(0, fixture.library.selectedIndex());
+
+    TEST_ASSERT_EQUAL(screens::Action::None, fixture.tap(kScrollX, kDownY));
+    TEST_ASSERT_EQUAL(screens::Action::OpenBook, fixture.tap(kListX, kRowY[0]));
+    TEST_ASSERT_EQUAL(3, fixture.library.selectedIndex());
+
+    for (int page = 0; page < 5; ++page)
+        fixture.tap(kScrollX, kDownY);
+    TEST_ASSERT_EQUAL(screens::Action::OpenBook, fixture.tap(kListX, kRowY[2]));
+    TEST_ASSERT_EQUAL(9, fixture.library.selectedIndex());
+
+    fixture.tap(kScrollX, kUpY);
+    TEST_ASSERT_EQUAL(screens::Action::OpenBook, fixture.tap(kListX, kRowY[0]));
+    TEST_ASSERT_EQUAL(4, fixture.library.selectedIndex());
+
+    // Dragging two rows' worth upward shows later books and never opens one.
+    fixture.touch(true, kListX, 150);
+    fixture.touch(true, kListX, 120);
+    fixture.touch(true, kListX, 80);
+    TEST_ASSERT_EQUAL(screens::Action::None, fixture.touch(true, kListX, 44));
+    TEST_ASSERT_EQUAL(screens::Action::None, fixture.touch(false, kListX, 44));
+    TEST_ASSERT_EQUAL(screens::Action::OpenBook, fixture.tap(kListX, kRowY[0]));
+    TEST_ASSERT_EQUAL(6, fixture.library.selectedIndex());
+}
+
+void test_library_opens_scrolled_to_the_current_book_and_accepts_a_slow_press() {
+    LibraryFixture fixture(12, 8);
+    TEST_ASSERT_EQUAL(screens::Action::OpenBook, fixture.tap(kListX, kRowY[1]));
+    TEST_ASSERT_EQUAL(8, fixture.library.selectedIndex());
+
+    fixture.touch(true, kListX, kRowY[2]);
+    fixture.touch(true, kListX, kRowY[2], 450);
+    fixture.touch(true, kListX, kRowY[2], 450);
+    TEST_ASSERT_EQUAL(screens::Action::OpenBook, fixture.touch(false, kListX, kRowY[2]));
+    TEST_ASSERT_EQUAL(9, fixture.library.selectedIndex());
+}
+
+void test_read_screen_labels_every_action() {
+    Arduino_GFX gfx(640, 172);
+    ui::Context context(gfx);
+    context.setTheme(theme());
+    context.setTouchSource({.surface = {640, 172}, .poll = &pollTouch});
+    struct Target {
+        uint16_t x;
+        screens::Screen expected;
+    };
+    // Chapters, Library and Typeface share the row under the resume card.
+    for (const Target target: {Target{200, screens::Screen::Chapters}, Target{370, screens::Screen::Library},
+                               Target{520, screens::Screen::BookFonts}}) {
+        auto screen = screens::Screen::Read;
+        for (const bool down: {true, false}) {
+            gTouchResult = ui::TouchSampleResult::Contact;
+            gContact = {down, target.x, 120};
+            context.pollTouch(down ? 100 : 130);
+            context.beginFrame(static_cast<uint8_t>(screens::Screen::Read));
+            screens::read(context, "Title", "Author", 42, screen);
+            context.endFrame();
+        }
+        TEST_ASSERT_EQUAL(target.expected, screen);
+    }
+}
+
 void test_square_regular_menus_reach_every_tab_and_power() {
     struct Size {
         uint16_t width;
@@ -1826,6 +2009,11 @@ int main(int, char**) {
     RUN_TEST(test_paused_reader_controls_are_reachable_and_clear_of_the_word);
     RUN_TEST(test_paused_reader_controls_draw_inside_the_lcd);
     RUN_TEST(test_square_regular_menus_reach_every_tab_and_power);
+    RUN_TEST(test_slow_press_still_activates_button_but_drag_off_cancels);
+    RUN_TEST(test_library_is_a_list_that_opens_the_tapped_book);
+    RUN_TEST(test_library_pages_with_buttons_and_follows_drags_by_whole_rows);
+    RUN_TEST(test_library_opens_scrolled_to_the_current_book_and_accepts_a_slow_press);
+    RUN_TEST(test_read_screen_labels_every_action);
     RUN_TEST(appearanceChecks::fourRotaries);
     RUN_TEST(appearanceChecks::wordTargets);
     RUN_TEST(appearanceChecks::batteryAndArrowRedraw);

@@ -71,6 +71,7 @@ namespace screens::readerLayout {
         bool ghostHidden = false;
         std::string_view speed;
         uint8_t percent = 0;
+        Control pressed = Control::None;
     };
     void drawArrows(ui::Context& ui, const settings::ReadingSettings& settings, bool reading, int16_t wordHeight,
                     bool ghostHidden = false);

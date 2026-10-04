@@ -222,10 +222,6 @@ namespace BookLibrary {
         return std::string_view{book.path}.starts_with(kArticleFilesPrefix);
     }
 
-    std::string_view displayName(const Entry& book) {
-        return book.title;
-    }
-
     std::string_view relativeName(const Entry& book) {
         const std::string prefix = std::string{kLibraryPath} + "/";
         const std::string_view path = book.path;

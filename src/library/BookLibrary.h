@@ -22,7 +22,9 @@ namespace BookLibrary {
 
     const Entry* at(const Listing& listing, size_t index);
     bool isArticle(const Entry& book);
-    std::string_view displayName(const Entry& book);
+    inline std::string_view displayName(const Entry& book) {
+        return book.title;
+    }
     std::string_view relativeName(const Entry& book);
     std::string id(const Entry& book);
     int indexOfPath(const Listing& listing, std::string_view target);

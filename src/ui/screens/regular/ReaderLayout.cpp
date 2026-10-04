@@ -231,21 +231,23 @@ namespace screens::readerLayout {
                    shown(settings.batteryIconVisibility));
         ui.progress({12, 30, static_cast<int16_t>(ui.width() - 24), 4}, view.percent);
         for (const ControlButton& button: layout.buttons) {
+            // The reader owns these touches, so it reports which button is under the finger.
+            const bool held = view.pressed == button.control;
             switch (button.control) {
             case Control::Menu:
-                ui.controlButton(button.rect, ui::Icon::Menu, ui.text(UiText::Menu));
+                ui.controlButton(button.rect, ui::Icon::Menu, ui.text(UiText::Menu), false, held);
                 break;
             case Control::Rewind:
-                ui.controlButton(button.rect, ui::Icon::Rewind);
+                ui.controlButton(button.rect, ui::Icon::Rewind, {}, false, held);
                 break;
             case Control::Slower:
-                ui.controlButton(button.rect, ui::Icon::Minus);
+                ui.controlButton(button.rect, ui::Icon::Minus, {}, false, held);
                 break;
             case Control::Faster:
-                ui.controlButton(button.rect, ui::Icon::Plus);
+                ui.controlButton(button.rect, ui::Icon::Plus, {}, false, held);
                 break;
             case Control::Play:
-                ui.controlButton(button.rect, ui::Icon::Play, ui.text(UiText::Resume), true);
+                ui.controlButton(button.rect, ui::Icon::Play, ui.text(UiText::Resume), true, held);
                 break;
             case Control::None:
                 break;
