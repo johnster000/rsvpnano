@@ -86,6 +86,8 @@ namespace WaveshareLcd349::TouchWiring {
     constexpr uint8_t kAddress = 0x3B;
     constexpr bool kReleaseBusBeforeRead = false;
     constexpr uint32_t kReadyPollIntervalMs = 5;
-    // Packet reads while a finger is down; 15 ms keeps release and drag latency near one display frame.
-    constexpr uint32_t kPollIntervalMs = 15;
+    constexpr uint32_t kPollIntervalMs = 30;
+    // The AXS15231B returns empty frames under a resting finger, more often the faster it is read.
+    // Reporting a lift only after this long keeps a held finger from flickering out.
+    constexpr uint32_t kReleaseConfirmMs = 100;
 } // namespace WaveshareLcd349::TouchWiring

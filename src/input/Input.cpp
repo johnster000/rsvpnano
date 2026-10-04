@@ -45,6 +45,7 @@ namespace Input {
         bool gTouchProbeFailureLogged = false;
         bool gTouchReadFailureLogged = false;
         uint8_t gTouchReleaseSamples = 0;
+        uint32_t gTouchLastContactMs = 0;
         uint8_t gTouchReadFailures = 0;
         uint32_t gTouchBackoffUntilMs = 0;
         uint32_t gTouchIgnoreUntilMs = 0;
@@ -254,9 +255,11 @@ namespace Input {
                             if (sample.contact.touched) {
                                 gTouchActive = true;
                                 gTouchReleaseSamples = 0;
+                                gTouchLastContactMs = nowMs;
                             } else if (gTouchActive
-                                       && ++gTouchReleaseSamples
-                                              < std::max<uint8_t>(1, gTouchTiming.releaseConfirmSamples)) {
+                                       && (++gTouchReleaseSamples
+                                               < std::max<uint8_t>(1, gTouchTiming.releaseConfirmSamples)
+                                           || nowMs - gTouchLastContactMs < gTouchTiming.releaseConfirmMs)) {
                                 emitContact = false;
                             } else {
                                 gTouchActive = false;

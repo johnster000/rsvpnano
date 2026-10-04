@@ -12,7 +12,8 @@ namespace {
         duringRead,
         retry,
         hold,
-        polling
+        polling,
+        gap
     };
     Scenario scenario;
     bool pending;
@@ -30,7 +31,7 @@ namespace {
         // IRQ noise during backoff must not cause another immediate failed transfer.
         if (scenario == Scenario::retry && FakeTask::now == 4)
             interrupt();
-        if (FakeTask::now >= 85)
+        if (FakeTask::now >= (scenario == Scenario::gap ? 165U : 85U))
             throw Finished{};
     }
 } // namespace
@@ -45,7 +46,7 @@ namespace Board::Input {
         return {};
     }
     ::Input::TouchTiming touchTiming() {
-        return {.failureBackoffMs = 30};
+        return {.releaseConfirmMs = scenario == Scenario::gap ? 50U : 0U, .failureBackoffMs = 30};
     }
     ::Input::PressActions currentActions() {
         controlReads.push_back(FakeTask::now);
@@ -68,6 +69,11 @@ namespace Board::Input {
         if (scenario == Scenario::retry && reads.size() == 1) {
             pending = true;
             return false;
+        }
+        if (scenario == Scenario::gap) {
+            // Two empty frames under a resting finger, then a real lift after the fifth read.
+            contact.touched = reads.size() <= 2 || reads.size() == 5;
+            return true;
         }
         contact.touched = scenario == Scenario::hold && reads.size() <= 2;
         return true;
@@ -133,6 +139,23 @@ void test_active_contact_keeps_sampling_and_confirms_release() {
     TEST_ASSERT_EQUAL(ui::TouchSampleResult::None, Input::pollTouch(contact));
 }
 
+void test_release_waits_out_empty_frames_under_a_resting_finger() {
+    run(Scenario::gap);
+    const std::vector<uint32_t> expected = {3, 23, 43, 63, 83, 103, 123, 143};
+    TEST_ASSERT_TRUE(reads == expected);
+    ui::TouchContact contact;
+    for (const uint32_t at: {3U, 23U, 83U}) {
+        TEST_ASSERT_EQUAL(ui::TouchSampleResult::Contact, Input::pollTouch(contact));
+        TEST_ASSERT_TRUE(contact.touched);
+        TEST_ASSERT_EQUAL_UINT32(at, contact.sampledAtMs);
+    }
+    // Two empty samples 40 ms after contact are not a lift; the third, 60 ms after, is.
+    TEST_ASSERT_EQUAL(ui::TouchSampleResult::Contact, Input::pollTouch(contact));
+    TEST_ASSERT_FALSE(contact.touched);
+    TEST_ASSERT_EQUAL_UINT32(143, contact.sampledAtMs);
+    TEST_ASSERT_EQUAL(ui::TouchSampleResult::None, Input::pollTouch(contact));
+}
+
 void test_polling_boards_keep_existing_periodic_reads() {
     run(Scenario::polling);
     const std::vector<uint32_t> expected = {0, 20, 40, 60, 80};
@@ -146,5 +169,6 @@ int main() {
     RUN_TEST(test_failed_read_retries_without_new_edge_and_respects_backoff);
     RUN_TEST(test_active_contact_keeps_sampling_and_confirms_release);
     RUN_TEST(test_polling_boards_keep_existing_periodic_reads);
+    RUN_TEST(test_release_waits_out_empty_frames_under_a_resting_finger);
     return UNITY_END();
 }
