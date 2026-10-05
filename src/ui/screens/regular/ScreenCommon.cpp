@@ -7,7 +7,8 @@ namespace screens::detail {
     namespace {
         constexpr int16_t kRailWidth = 136;
         constexpr int16_t kContentGap = 12;
-        constexpr int16_t kRightInset = 48;
+        // The side-rail LCD powers off from its PWR key, so its content runs to the right edge.
+        constexpr int16_t kRightMargin = 8;
         constexpr int16_t kPowerSize = 36;
 
         // Short, wide panels keep the side rail; squarer panels put the same tabs across the top.
@@ -98,9 +99,6 @@ namespace screens::detail {
                    ui::Icon::Hourglass)) {
             screen = Screen::FocusTimers;
         }
-        if (ui.iconButton({static_cast<int16_t>(ui.width() - 46), 4, 36, 36}, ui::Icon::Power)) {
-            return Action::PowerOff;
-        }
         return Action::None;
     }
 
@@ -111,7 +109,7 @@ namespace screens::detail {
     ui::Rect tabContent(ui::Context& ui) {
         if (sideRail(ui)) {
             const int16_t x = static_cast<int16_t>(kRailWidth + kContentGap);
-            return {x, 8, static_cast<int16_t>(ui.width() - x - kRightInset), static_cast<int16_t>(ui.height() - 16)};
+            return {x, 8, static_cast<int16_t>(ui.width() - x - kRightMargin), static_cast<int16_t>(ui.height() - 16)};
         }
         if (!topBar(ui))
             return content(ui);

@@ -1814,10 +1814,10 @@ namespace {
         }
     };
 
-    // Side-rail content on the 640x172 LCD: three 49 px rows from y 8, scroll column at x 540.
+    // Side-rail content on the 640x172 LCD: three 49 px rows from y 8, scroll column at x 580.
     constexpr uint16_t kListX = 300;
     constexpr uint16_t kRowY[] = {32, 85, 138};
-    constexpr uint16_t kScrollX = 566;
+    constexpr uint16_t kScrollX = 606;
     constexpr uint16_t kUpY = 40;
     constexpr uint16_t kDownY = 140;
 } // namespace
@@ -1869,6 +1869,28 @@ void test_library_opens_scrolled_to_the_current_book_and_accepts_a_slow_press() 
     fixture.touch(true, kListX, kRowY[2], 450);
     TEST_ASSERT_EQUAL(screens::Action::OpenBook, fixture.touch(false, kListX, kRowY[2]));
     TEST_ASSERT_EQUAL(9, fixture.library.selectedIndex());
+}
+
+void test_side_rail_has_no_power_button_and_content_reaches_the_edge() {
+    Arduino_GFX gfx(640, 172);
+    ui::Context context(gfx);
+    context.setTheme(theme());
+    context.setTouchSource({.surface = {640, 172}, .poll = &pollTouch});
+    auto screen = screens::Screen::Library;
+    screens::Action action = screens::Action::None;
+    for (const bool down: {true, false}) {
+        gTouchResult = ui::TouchSampleResult::Contact;
+        gContact = {down, 618, 22};
+        context.pollTouch(down ? 100 : 130);
+        context.beginFrame(0);
+        action = screens::detail::navigation(context, screens::Screen::Library, screen);
+        context.endFrame();
+    }
+    // Power off is a long PWR press; the corner it used to occupy belongs to the content.
+    TEST_ASSERT_EQUAL(screens::Action::None, action);
+    TEST_ASSERT_EQUAL(screens::Screen::Library, screen);
+    const auto content = screens::detail::tabContent(context);
+    TEST_ASSERT_EQUAL(632, content.x + content.w);
 }
 
 void test_read_screen_labels_every_action() {
@@ -2014,6 +2036,7 @@ int main(int, char**) {
     RUN_TEST(test_library_pages_with_buttons_and_follows_drags_by_whole_rows);
     RUN_TEST(test_library_opens_scrolled_to_the_current_book_and_accepts_a_slow_press);
     RUN_TEST(test_read_screen_labels_every_action);
+    RUN_TEST(test_side_rail_has_no_power_button_and_content_reaches_the_edge);
     RUN_TEST(appearanceChecks::fourRotaries);
     RUN_TEST(appearanceChecks::wordTargets);
     RUN_TEST(appearanceChecks::batteryAndArrowRedraw);
