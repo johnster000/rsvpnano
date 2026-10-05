@@ -49,8 +49,11 @@ namespace screens {
             readerLayout::progressText(ui, reading ? settings::FooterMetric::percentage : config.footerMetric, 42, 132);
         const auto chrome = appearanceLayout::chrome(ui, config.leftHanded, layout);
         const ui::Rect preview = ui.paintBounds(typography ? layout.preview : chrome.preview);
+        // Control-bar layouts never draw the << hint, so it is neither previewed nor toggled there.
+        const bool arrowsEditable =
+            !typography && !readerLayout::controls(ui.width(), ui.height(), config.leftHanded).available();
         if (showPreview && ui.redraw(preview, state, true)) {
-            const auto arrows = typography ? ui::TextLayout{} : readerLayout::prepareArrows(ui, config, reading, true);
+            const auto arrows = arrowsEditable ? readerLayout::prepareArrows(ui, config, reading, true) : ui::TextLayout{};
             ui.paint(preview, [&](Arduino_GFX& output, ui::Rect translated) {
                 Arduino_GFX& previousOutput = text_.setOutput(output);
                 const int16_t dx = static_cast<int16_t>(translated.x - preview.x);
@@ -62,7 +65,7 @@ namespace screens {
                 text_.setTextColor(ui.blend(Foreground, config.phantomWords ? 64 : 28), ui.color(Background));
                 text_.drawString(before, static_cast<int16_t>(beforeX + dx), wordBaseline, type.tracking);
                 text_.drawString(after, static_cast<int16_t>(afterX + dx), wordBaseline, type.tracking);
-                if (!typography)
+                if (arrowsEditable)
                     readerLayout::drawArrows(ui, output, config, reading, arrows, inkHeight + 12, dx, dy, true);
                 text_.setOutput(previousOutput);
             });
@@ -166,7 +169,8 @@ namespace screens {
             toggle(chrome.reader.batteryParts.label, config.batteryLabelVisibility);
             toggle(chrome.reader.chapter, config.chapterVisibility);
             toggle(chrome.reader.progress, config.progressVisibility);
-            toggle(chrome.reader.arrows, config.arrowsVisibility);
+            if (arrowsEditable)
+                toggle(chrome.reader.arrows, config.arrowsVisibility);
             const auto batteryType = config.batteryLabel == settings::BatteryLabel::percentage    ? "%"
                                    : config.batteryLabel == settings::BatteryLabel::timeRemaining ? "h"
                                                                                                   : "V";

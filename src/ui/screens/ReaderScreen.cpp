@@ -642,7 +642,9 @@ namespace screens {
             const bool rightToLeft = bidi && rsvpBidi_.rightToLeft();
             preparePhantom(phantoms_[0], before, rightToLeft);
             preparePhantom(phantoms_[1], after, rightToLeft);
-            const bool arrowsShown = !vertical && !controlsVisible;
+            // Layouts with the paused control bar rewind from its button, so they draw no << hint.
+            const bool arrowsShown =
+                !vertical && !readerLayout::controls(ui.width(), ui.height(), settings.leftHanded).available();
             const auto arrows = arrowsShown ? readerLayout::prepareArrows(ui, settings, reading) : ui::TextLayout{};
             ui.paint(readingArea, [&](Arduino_GFX& gfx, ui::Rect translated) {
                 Arduino_GFX& previousOutput = text_.setOutput(gfx);
@@ -895,7 +897,7 @@ namespace screens {
                 lastTapValid_ = false;
                 return Action::None;
             }
-            if (previousSentenceTapped(touch.x, touch.y)) {
+            if (!deckMode && previousSentenceTapped(touch.x, touch.y)) {
                 lastTapValid_ = false;
                 ReadingLoop::rewindSentence(session);
                 ReadingLoop::pause(session);

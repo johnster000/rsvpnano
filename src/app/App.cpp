@@ -460,6 +460,11 @@ void App::handleInput(Input::ActionMask actions, uint32_t nowMs) {
         enterStandby(nowMs);
         return;
     }
+    if (Input::hasAction(actions, Input::ActionCycleTheme)) {
+        if (!usbTransfer_.active())
+            cycleTheme(nowMs);
+        return;
+    }
     if (Input::hasAction(actions, Input::ActionBack)) {
         if (companionApi_.active()) {
             companionApi_.end();
@@ -526,6 +531,18 @@ void App::handleTouch(uint32_t nowMs) {
     } else {
         renderScreen(nowMs);
     }
+}
+
+void App::cycleTheme(uint32_t nowMs) {
+    auto& interface = settingsStore_.settings().interface;
+    const ui::themes::Theme& next = interfaceScreen_.themes.next(interface.selectedThemeId);
+    if (next.id == interface.selectedThemeId)
+        return; // Only the built-in theme is installed.
+    interface.selectedThemeId = next.id;
+    settingsStore_.acceptChanges();
+    immediateUi_.setTheme(next);
+    readerScreen_.applyTheme(next);
+    renderScreen(nowMs);
 }
 
 void App::leaveReader(uint32_t nowMs) {

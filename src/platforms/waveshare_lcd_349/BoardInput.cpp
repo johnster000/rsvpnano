@@ -60,7 +60,8 @@ namespace Board::Input {
         const bool primaryPressed = primaryPressedRaw();
         const bool powerPressed = powerPressedRaw();
         if (primaryPressed) {
-            actions.shortPress |= ::Input::ActionSelect | ::Input::ActionPlayPause;
+            // Reading is on the touchscreen, so BOOT steps through themes; holding it still sleeps.
+            actions.shortPress |= ::Input::ActionCycleTheme;
             actions.longPress |= ::Input::ActionStandby;
         }
         if (powerPressed) {

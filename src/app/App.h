@@ -56,6 +56,7 @@ private:
     void handleInput(Input::ActionMask actions, uint32_t nowMs);
     void handleTouch(uint32_t nowMs);
     void leaveReader(uint32_t nowMs);
+    void cycleTheme(uint32_t nowMs);
     void reloadStorageCatalogs();
     void runRss();
     void runBookOpen(size_t index, uint32_t nowMs);
