@@ -82,6 +82,9 @@ namespace screens {
             Paragraph
         };
         bool pausedControlsVisible() const;
+        bool sentenceScrubAvailable() const;
+        int sentenceSteps(int deltaX) const;
+        void drawSentenceScrub(ui::Context& ui);
         Action runControl(readerLayout::Control control, uint32_t nowMs, Preferences& preferences,
                           settings::SettingsStore& settingsStore);
         void browseParagraphs(uint16_t y, uint32_t nowMs);
@@ -147,6 +150,7 @@ namespace screens {
         BidiText::Line phantomLine_;
         std::array<Phantom, 2> phantoms_;
         bool pagePreview_ = false;
+        bool scrubbing_ = false;
         uint32_t paragraphTickMs_ = 0;
         int32_t paragraphRemainder_ = 0;
     };

@@ -49,6 +49,12 @@ namespace screens::PageReader {
             return anchor - paragraph <= kParagraphSnapWords ? paragraph : anchor;
         }
 
+        int16_t wordGap(const ui::fonts::AlphaTextRenderer<640>& text) {
+            // Strike spaces are tight once whole lines are set, most of all in the 1-bit compact strike.
+            return std::max<int16_t>({1, text.glyphAdvance(' '),
+                                      static_cast<int16_t>((text.pixelsPerEm() * 28 + 50) / 100)});
+        }
+
         void activateFace(ui::fonts::AlphaTextRenderer<640>& text, const FontCatalog::Face& face) {
             text.setFont(face.raster.get());
         }
@@ -267,7 +273,7 @@ namespace screens::PageReader {
                     State::Word& prepared =
                         prepareWord(state, index, faceIndex, text, face, typography, session, shapingParagraph,
                                     shapingBidi, paragraphBidi, shapingBidiReady, shapingBidiLine);
-                    const int16_t spaceWidth = std::max<int16_t>(1, text.glyphAdvance(' '));
+                    const int16_t spaceWidth = wordGap(text);
                     const bool joinsCjk = index > line.start && prepared.cjk && wordAt(state, index - 1).cjk;
                     const int16_t gap = index == line.start ? startsParagraph ? spaceWidth * 2 : 0
                                       : joinsCjk            ? 0
@@ -474,7 +480,7 @@ namespace screens::PageReader {
                 line.inkKnown = true;
                 if (line.bidi) {
                     activateFace(text, faceAt(state, line.start));
-                    const int16_t indent = line.paragraphStart ? std::max<int16_t>(1, text.glyphAdvance(' ')) * 2 : 0;
+                    const int16_t indent = line.paragraphStart ? wordGap(text) * 2 : 0;
                     line.x = line.rightToLeft ? static_cast<int16_t>(area.x + area.w - kMarginX - indent - line.width)
                                               : static_cast<int16_t>(area.x + kMarginX + indent);
                     size_t activeWord = kInvalidIndex;

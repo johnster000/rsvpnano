@@ -521,6 +521,40 @@ void test_sentence_end_survives_store_cache_reload(void) {
     TEST_ASSERT_TRUE(ReadingLoop::currentWordEndsSentence(session));
 }
 
+void test_sentence_steps_follow_punctuation_and_paragraphs(void) {
+    // "Mr." is not a sentence end; the heading has no period but its paragraph still ends it.
+    ReadingSession r = makeReader(300, {"Chapter", "One", "Mr.", "Darcy", "bowed.", "She", "laughed!", "Then",
+                                        "silence", "fell."});
+    r.metadata.paragraphStarts = {0, 2};
+    TEST_ASSERT_EQUAL_UINT32(2, ReadingLoop::sentenceStart(r, 4));
+    TEST_ASSERT_EQUAL_UINT32(5, ReadingLoop::sentenceEnd(r, 2));
+    TEST_ASSERT_EQUAL_UINT32(2, ReadingLoop::sentenceEnd(r, 0));
+    TEST_ASSERT_EQUAL_UINT32(0, ReadingLoop::sentenceStart(r, 1));
+    TEST_ASSERT_EQUAL_UINT32(10, ReadingLoop::sentenceEnd(r, 8));
+
+    // Steps count from the sentence holding the base word and land on sentence starts.
+    ReadingLoop::seekSentence(r, 3, 1);
+    TEST_ASSERT_EQUAL_UINT32(5, r.state.wordIndex);
+    ReadingLoop::seekSentence(r, 3, 2);
+    TEST_ASSERT_EQUAL_UINT32(7, r.state.wordIndex);
+    ReadingLoop::seekSentence(r, 3, 9);
+    TEST_ASSERT_EQUAL_UINT32(7, r.state.wordIndex);
+    ReadingLoop::seekSentence(r, 8, -1);
+    TEST_ASSERT_EQUAL_UINT32(5, r.state.wordIndex);
+    ReadingLoop::seekSentence(r, 8, -9);
+    TEST_ASSERT_EQUAL_UINT32(0, r.state.wordIndex);
+}
+
+void test_unpunctuated_text_breaks_into_bounded_sentences(void) {
+    std::vector<std::string> words(ReadingLoop::kMaxSentenceWords * 3, "word");
+    ReadingSession r = makeReader(300, words);
+    const size_t middle = ReadingLoop::kMaxSentenceWords + 10;
+    const size_t start = ReadingLoop::sentenceStart(r, middle);
+    TEST_ASSERT_EQUAL_UINT32(10, start);
+    TEST_ASSERT_GREATER_THAN(middle, ReadingLoop::sentenceEnd(r, middle));
+    TEST_ASSERT_LESS_OR_EQUAL(middle + ReadingLoop::kMaxSentenceWords, ReadingLoop::sentenceEnd(r, middle));
+}
+
 int main(void) {
     UNITY_BEGIN();
 
@@ -591,6 +625,8 @@ int main(void) {
     RUN_TEST(test_rewind_sentence_ignores_abbreviation_periods);
 
     RUN_TEST(test_word_at_returns_correct_word);
+    RUN_TEST(test_sentence_steps_follow_punctuation_and_paragraphs);
+    RUN_TEST(test_unpunctuated_text_breaks_into_bounded_sentences);
 
     return UNITY_END();
 }

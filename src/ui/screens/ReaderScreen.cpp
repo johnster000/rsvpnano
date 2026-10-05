@@ -13,6 +13,7 @@
 #include "text/Utf8Text.h"
 #include "ui/screens/ReaderLayout.h"
 #include "ui/screens/Screens.h"
+#include "ui/screens/SentenceScrub.h"
 
 namespace screens {
     namespace {
@@ -29,6 +30,11 @@ namespace screens {
         // Long enough for a swipe to leave tap range first, short enough to feel like press-to-read.
         constexpr uint32_t kHoldToReadMs = 140;
         constexpr int kMaxScrubSteps = 96;
+        // A sentence per finger-width of travel keeps the scrub slow enough to read while it moves.
+        constexpr int kSentenceStepPx = 60;
+        constexpr int kMaxSentenceSteps = 40;
+        // The "small" RSVP strike: about 2.4x the compact strike the page preview uses.
+        constexpr size_t kScrubStrikeIndex = 2;
         constexpr uint32_t kPlaybackMirrorIntervalMs = 120'000;
         constexpr int32_t kParagraphScrollScale = 1'000'000;
         constexpr int32_t kMaximumParagraphRate = 5'000;
@@ -284,7 +290,7 @@ namespace screens {
     }
 
     void ReaderScreen::prefetchNextWord(uint32_t nowMs) {
-        if (settings_.mode == settings::ReadingMode::page || pagePreview_
+        if (settings_.mode == settings::ReadingMode::page || pagePreview_ || scrubbing_
             || renderedWordIndex_ != session.state.wordIndex)
             return;
         prefetchUpcomingFont(nowMs);
@@ -441,6 +447,10 @@ namespace screens {
                             uint32_t nowMs) {
         width_ = ui.width();
         height_ = ui.height();
+        if (scrubbing_) {
+            drawSentenceScrub(ui);
+            return;
+        }
         if (touchIntent_ == TouchIntent::Scrub || touchIntent_ == TouchIntent::Paragraph) {
             const auto typeface = [this](size_t index) {
                 return pageTypeface(index);
@@ -934,7 +944,8 @@ namespace screens {
                 lastTapValid_ = false;
                 touchIntent_ = TouchIntent::Scrub;
                 ui.invalidate();
-                pagePreview_ = settings_.mode != settings::ReadingMode::page;
+                scrubbing_ = deckMode && sentenceScrubAvailable();
+                pagePreview_ = !scrubbing_ && settings_.mode != settings::ReadingMode::page;
                 if (pagePreview_)
                     pageState_.pageStart = SIZE_MAX;
             } else if (absY > absX + kAxisBias && (pagePreview_ || absY >= kSwipeThreshold)) {
@@ -946,6 +957,24 @@ namespace screens {
                     paragraphRemainder_ = 0;
                 }
             }
+        }
+        if (touchIntent_ == TouchIntent::Scrub && scrubbing_) {
+            // Sentence scrub: the view shows where the finger would land; letting go keeps that sentence.
+            const int steps = sentenceSteps(deltaX);
+            if (steps != scrubSteps_) {
+                scrubSteps_ = steps;
+                if (steps == 0)
+                    ReadingLoop::seekTo(session, touchStartWord_);
+                else
+                    ReadingLoop::seekSentence(session, touchStartWord_, steps);
+            }
+            if (ended) {
+                resetTouch();
+                ui.invalidate();
+                renderedWordIndex_ = SIZE_MAX;
+                persistPosition(preferences, nowMs);
+            }
+            return Action::None;
         }
         if (touchIntent_ == TouchIntent::Scrub) {
             const int steps = scrubSteps(deltaX);
@@ -1122,6 +1151,7 @@ namespace screens {
 
     void ReaderScreen::resetTouch() {
         touching_ = false;
+        scrubbing_ = false;
         touchIntent_ = TouchIntent::None;
         pressedControl_ = readerLayout::Control::None;
         scrubSteps_ = 0;
@@ -1142,6 +1172,45 @@ namespace screens {
         paragraphRemainder_ %= kParagraphScrollScale;
         if (steps != 0)
             ReadingLoop::seekParagraph(session, steps);
+    }
+
+    bool ReaderScreen::sentenceScrubAvailable() const {
+        // Right-to-left and vertical text keep the page preview, which lays out bidi and vertical runs.
+        return settings_.mode != settings::ReadingMode::page && session.metadata.writingMode != WritingMode::verticalRl
+            && !session.metadata.requiresBidi(0, ReadingLoop::wordCount(session));
+    }
+
+    int ReaderScreen::sentenceSteps(int deltaX) const {
+        const int distance = std::abs(deltaX) - kSwipeThreshold;
+        if (distance < kSentenceStepPx)
+            return 0;
+        const int steps = std::min(distance / kSentenceStepPx, kMaxSentenceSteps);
+        return deltaX > 0 ? steps : -steps;
+    }
+
+    void ReaderScreen::drawSentenceScrub(ui::Context& ui) {
+        const size_t count = ReadingLoop::wordCount(session);
+        const size_t position = count == 0 ? 0 : std::min<size_t>(session.state.wordIndex, count - 1);
+        sentenceScrub::Sentences sentences;
+        sentences.current = ReadingLoop::sentenceStart(session, position);
+        sentences.next = ReadingLoop::sentenceEnd(session, position);
+        sentences.after = ReadingLoop::sentenceEnd(session, sentences.next);
+        sentences.previous =
+            sentences.current > 0 ? ReadingLoop::sentenceStart(session, sentences.current - 1) : sentences.current;
+        const uint8_t percent = ReadingProgress::percent(position, count);
+
+        uint32_t state = ui::Context::combine(static_cast<uint32_t>(sentences.current),
+                                              static_cast<uint32_t>(sentences.next));
+        state = ui::Context::combine(state, fontRevision_);
+        state = ui::Context::combine(state, typographyRevision_);
+        state = ui::Context::combine(state, background_);
+        state = ui::Context::combine(state, percent);
+        sentenceScrub::draw(ui, text_, sentences, percent, state,
+                            {.wordAt = [this](size_t index) { return ReadingLoop::wordAt(session, index); },
+                             .family = [this](size_t index) { return fontChoice(index); },
+                             .font = [this](size_t family) -> const ui::fonts::AlphaFont& {
+                                 return fonts.loadFace(family, kScrubStrikeIndex).raster.get();
+                             }});
     }
 
     int ReaderScreen::scrubSteps(int deltaX) const {

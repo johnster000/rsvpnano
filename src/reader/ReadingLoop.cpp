@@ -1030,6 +1030,49 @@ namespace ReadingLoop {
         return true;
     }
 
+    size_t sentenceStart(const ReadingSession& session, size_t wordIndex) {
+        const size_t count = wordCount(session);
+        if (count == 0)
+            return 0;
+        wordIndex = std::min(wordIndex, count - 1);
+        const auto& paragraphs = session.metadata.paragraphStarts;
+        for (size_t walked = 0; wordIndex > 0 && walked < kMaxSentenceWords; ++walked) {
+            if (std::ranges::binary_search(paragraphs, wordIndex) || wordEndsSentenceAt(session, wordIndex - 1))
+                break;
+            --wordIndex;
+        }
+        return wordIndex;
+    }
+
+    size_t sentenceEnd(const ReadingSession& session, size_t wordIndex) {
+        const size_t count = wordCount(session);
+        if (wordIndex >= count)
+            return count;
+        const auto& paragraphs = session.metadata.paragraphStarts;
+        size_t next = wordIndex + 1;
+        for (size_t walked = 1; next < count && walked < kMaxSentenceWords; ++walked, ++next) {
+            if (std::ranges::binary_search(paragraphs, next) || wordEndsSentenceAt(session, next - 1))
+                break;
+        }
+        return next;
+    }
+
+    void seekSentence(ReadingSession& session, size_t baseIndex, int steps) {
+        const size_t count = wordCount(session);
+        if (count == 0)
+            return;
+        size_t index = sentenceStart(session, baseIndex);
+        for (; steps > 0; --steps) {
+            const size_t next = sentenceEnd(session, index);
+            if (next >= count)
+                break;
+            index = next;
+        }
+        for (; steps < 0 && index > 0; ++steps)
+            index = sentenceStart(session, index - 1);
+        seekTo(session, index);
+    }
+
     void rewindSentence(ReadingSession& session) {
         if (wordCount(session) == 0)
             return;

@@ -30,6 +30,11 @@ namespace ReadingLoop {
     void seekRelative(ReadingSession& session, size_t baseIndex, int steps);
     bool seekParagraph(ReadingSession& session, int steps);
     void rewindSentence(ReadingSession& session);
+    // Sentences also break at paragraph starts, and at most every kMaxSentenceWords words of unpunctuated text.
+    inline constexpr size_t kMaxSentenceWords = 96;
+    size_t sentenceStart(const ReadingSession& session, size_t wordIndex);
+    size_t sentenceEnd(const ReadingSession& session, size_t wordIndex);
+    void seekSentence(ReadingSession& session, size_t baseIndex, int steps);
     void adjustWpm(settings::ReadingSettings& settings, int delta);
 
     std::string_view wordAt(const ReadingSession& session, size_t index);

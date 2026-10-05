@@ -20,6 +20,7 @@
 #include "ui/Ui.h"
 #include "ui/screens/ChaptersScreen.h"
 #include "ui/screens/LibraryScreen.h"
+#include "ui/screens/SentenceScrub.h"
 #include "ui/screens/PageReaderScreen.h"
 #include "ui/screens/ScreenCommon.h"
 #include "ui/screens/Screens.h"
@@ -1893,6 +1894,49 @@ void test_side_rail_has_no_power_button_and_content_reaches_the_edge() {
     TEST_ASSERT_EQUAL(632, content.x + content.w);
 }
 
+namespace {
+    void assertLine(const screens::sentenceScrub::Line& line, size_t start, size_t end,
+                    screens::sentenceScrub::Part part, bool leading, bool trailing) {
+        TEST_ASSERT_EQUAL_UINT32(start, line.start);
+        TEST_ASSERT_EQUAL_UINT32(end, line.end);
+        TEST_ASSERT_EQUAL(static_cast<int>(part), static_cast<int>(line.part));
+        TEST_ASSERT_EQUAL(leading, line.leadingEllipsis);
+        TEST_ASSERT_EQUAL(trailing, line.trailingEllipsis);
+    }
+} // namespace
+
+void test_scrub_layout_frames_the_current_sentence_with_its_neighbours() {
+    using screens::sentenceScrub::Part;
+    const auto advance = [](size_t) -> int16_t { return 10; };
+    const auto spaced = [](size_t) { return false; };
+    const screens::sentenceScrub::Metrics metrics{.width = 50, .gap = 2, .ellipsis = 6, .lines = 4};
+
+    // The previous sentence shows only its end, the current one wraps, and the next one gets the last line.
+    auto layout = screens::sentenceScrub::layout({.previous = 0, .current = 10, .next = 30, .after = 40}, metrics,
+                                                 advance, spaced);
+    TEST_ASSERT_EQUAL_UINT32(4, layout.count);
+    assertLine(layout.lines[0], 7, 10, Part::Previous, true, false);
+    assertLine(layout.lines[1], 10, 14, Part::Current, false, false);
+    assertLine(layout.lines[2], 14, 17, Part::Current, false, true);
+    assertLine(layout.lines[3], 30, 33, Part::Next, false, true);
+
+    // At the start of the book a short sentence leaves the remaining lines to the next one.
+    layout = screens::sentenceScrub::layout({.previous = 0, .current = 0, .next = 3, .after = 20}, metrics, advance,
+                                            spaced);
+    TEST_ASSERT_EQUAL_UINT32(4, layout.count);
+    assertLine(layout.lines[0], 0, 3, Part::Current, false, false);
+    assertLine(layout.lines[1], 3, 7, Part::Next, false, false);
+    assertLine(layout.lines[2], 7, 11, Part::Next, false, false);
+    assertLine(layout.lines[3], 11, 14, Part::Next, false, true);
+
+    // CJK words join without gaps, so more of them share a line.
+    layout = screens::sentenceScrub::layout({.previous = 0, .current = 0, .next = 8, .after = 8}, metrics, advance,
+                                            [](size_t index) { return index > 0; });
+    TEST_ASSERT_EQUAL_UINT32(2, layout.count);
+    assertLine(layout.lines[0], 0, 5, Part::Current, false, false);
+    assertLine(layout.lines[1], 5, 8, Part::Current, false, false);
+}
+
 void test_read_screen_labels_every_action() {
     Arduino_GFX gfx(640, 172);
     ui::Context context(gfx);
@@ -2037,6 +2081,7 @@ int main(int, char**) {
     RUN_TEST(test_library_opens_scrolled_to_the_current_book_and_accepts_a_slow_press);
     RUN_TEST(test_read_screen_labels_every_action);
     RUN_TEST(test_side_rail_has_no_power_button_and_content_reaches_the_edge);
+    RUN_TEST(test_scrub_layout_frames_the_current_sentence_with_its_neighbours);
     RUN_TEST(appearanceChecks::fourRotaries);
     RUN_TEST(appearanceChecks::wordTargets);
     RUN_TEST(appearanceChecks::batteryAndArrowRedraw);
