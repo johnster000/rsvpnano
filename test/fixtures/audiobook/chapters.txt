@@ -1,0 +1,22 @@
+;FFMETADATA1
+title=Test Audiobook
+artist=RSVP Nano
+album=Test Audiobook
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=0
+END=1000
+title=Opening
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=1000
+END=2000
+title=The Middle
+
+[CHAPTER]
+TIMEBASE=1/1000
+START=2000
+END=3000
+title=Ending
