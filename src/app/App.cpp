@@ -1,11 +1,13 @@
 #include "app/App.h"
 #include <esp_log.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <esp_system.h>
 #include <string>
 
+#include "audio/AudioFiles.h"
 #include "board/BoardAudio.h"
 #include "board/BoardConfig.h"
 #include "board/BoardInput.h"
@@ -17,6 +19,7 @@
 #include "feeds/RssFeeds.h"
 #include "settings/NvsSecurity.h"
 #include "library/ReadingProgress.h"
+#include "storage/fs/StorageFiles.h"
 #include "storage/migration/Migration.h"
 #include "update/OtaUpdater.h"
 
@@ -51,6 +54,7 @@ namespace {
 
 void App::begin() {
     prefs_.begin(settings::kStateNvsNamespace);
+    audio_.setVolume(prefs_.getUChar("audioVolume", 75));
     storage_.setStatusCallback(&App::renderStorageStatus, this);
     bootMs_ = millis();
     lastActivityMs_ = bootMs_;
@@ -161,6 +165,8 @@ void App::update(uint32_t nowMs) {
     ReadingProgress::save(readerScreen_.session, prefs_, false, nowMs);
 
     renderScreen(nowMs);
+    if (audio_.busy())
+        lastActivityMs_ = nowMs; // Listening or recording keeps the device awake.
     if (!preparingTypography && !readerScreen_.session.playing && !companionApi_.active() && !usbTransfer_.active()
         && screen_ != screens::Screen::FocusSession && screen_ != screens::Screen::Status
         && kStandbyMs[settingsStore_.settings().interface.standbyTimerIndex] > 0
@@ -204,6 +210,11 @@ void App::renderScreen(uint32_t nowMs) {
     case screens::Screen::Usb:
         screens::status(immediateUi_, "USB", usbTransfer_.statusMessage(), immediateUi_.text(UiText::HoldPowerToExit));
         return;
+    case screens::Screen::Audiobooks:
+    case screens::Screen::AudiobookPlayer:
+    case screens::Screen::Voice:
+        renderAudioScreen(renderedScreen, nowMs);
+        return;
     case screens::Screen::Standby:
         standbyScreen_.draw(immediateUi_);
         return;
@@ -226,7 +237,8 @@ void App::renderScreen(uint32_t nowMs) {
         break;
     case screens::Screen::Settings:
         immediateUi_.beginFrame(static_cast<uint8_t>(screen_));
-        action = screens::settings(immediateUi_, screen_);
+        action = screens::settings(
+            immediateUi_, {storage_.mounted(), storage_.books().size(), settings::nvsEncryptionState()}, screen_);
         break;
     case screens::Screen::ReadingSettings: {
         immediateUi_.beginFrame(static_cast<uint8_t>(screen_));
@@ -339,8 +351,195 @@ void App::renderScreen(uint32_t nowMs) {
     if (screen_ != renderedScreen) {
         if (screen_ == screens::Screen::Library)
             libraryScreen_.reset();
+        enteredScreen(screen_);
     }
     handleScreenAction(action, nowMs);
+}
+
+void App::enteredScreen(screens::Screen screen) {
+    if (screen == screens::Screen::Audiobooks) {
+        audiobooksStale_ = true;
+        audiobooksScreen_.revealCurrent();
+    } else if (screen == screens::Screen::Voice) {
+        memosStale_ = true;
+        voiceScreen_.reset();
+    }
+}
+
+void App::renderAudioScreen(screens::Screen renderedScreen, uint32_t nowMs) {
+    const audio::Status status = audio_.status();
+    if (screen_ == screens::Screen::Voice && lastVoiceMode_ == audio::Mode::Recording
+        && status.mode != audio::Mode::Recording)
+        memosStale_ = true; // A memo just finished; list it.
+    lastVoiceMode_ = status.mode;
+    if (screen_ != screens::Screen::Voice && audiobooksStale_) {
+        audiobooksStale_ = false;
+        scanAudiobooks();
+    }
+    if (screen_ == screens::Screen::Voice && memosStale_) {
+        memosStale_ = false;
+        scanMemos();
+    }
+
+    const std::string path = audio_.path();
+    const std::string title = audio_.title();
+    const std::string chapter = audio_.chapterTitle(status.chapter);
+    const screens::NowPlaying playing{status, path, title, chapter};
+    immediateUi_.beginFrame(static_cast<uint8_t>(screen_));
+    screens::AudioRequest request;
+    switch (screen_) {
+    case screens::Screen::Audiobooks:
+        request = audiobooksScreen_.drawList(immediateUi_, audiobooks_, playing, screen_);
+        break;
+    case screens::Screen::AudiobookPlayer:
+        request = audiobooksScreen_.drawPlayer(immediateUi_, playing, screen_);
+        break;
+    default:
+        request = voiceScreen_.draw(immediateUi_, memos_, playing, Board::Audio::hasMicrophone(), nowMs, screen_);
+        break;
+    }
+    immediateUi_.endFrame();
+    handleAudioRequest(request, renderedScreen, nowMs);
+    if (screen_ != renderedScreen) {
+        enteredScreen(screen_);
+        renderScreen(nowMs);
+    }
+}
+
+void App::handleAudioRequest(const screens::AudioRequest& request, screens::Screen renderedScreen, uint32_t nowMs) {
+    using Type = screens::AudioRequest::Type;
+    if (request.action != screens::Action::None) {
+        handleScreenAction(request.action, nowMs);
+        return;
+    }
+    const audio::Status status = audio_.status();
+    switch (request.type) {
+    case Type::None:
+        break;
+    case Type::Play:
+        if (renderedScreen == screens::Screen::Voice) {
+            if (request.index < memos_.size())
+                audio_.play(memos_[request.index].path, audio::Content::Memo);
+        } else if (request.index < audiobooks_.size()) {
+            const std::string& path = audiobooks_[request.index].path;
+            // Opening the book that is already loaded just shows its player.
+            if (status.content != audio::Content::Audiobook || status.mode == audio::Mode::Idle
+                || audio_.path() != path)
+                audio_.play(path, audio::Content::Audiobook);
+        }
+        break;
+    case Type::TogglePause:
+        if (status.mode == audio::Mode::Idle && status.content != audio::Content::None && !audio_.path().empty())
+            audio_.play(audio_.path(), status.content);
+        else
+            audio_.togglePause();
+        break;
+    case Type::Skip:
+        audio_.skip(request.value);
+        break;
+    case Type::Chapter:
+        audio_.stepChapter(request.value);
+        break;
+    case Type::Volume: {
+        const uint8_t volume = static_cast<uint8_t>(std::clamp<int>(status.volume + request.value, 0, 100));
+        audio_.setVolume(volume);
+        prefs_.putUChar("audioVolume", volume);
+        break;
+    }
+    case Type::Record:
+        if (status.mode == audio::Mode::Recording) {
+            audio_.stop();
+        } else {
+            scanMemos();
+            uint32_t next = 1;
+            for (const screens::MemoEntry& memo: memos_)
+                next = std::max(next, memo.number + 1);
+            audio_.record(std::string{audio::kMemosPath} + "/" + audio::memoFileName(next));
+        }
+        break;
+    case Type::Delete:
+        if (request.index < memos_.size()) {
+            const std::string path = memos_[request.index].path;
+            if (audio_.path() == path)
+                audio_.stopAndWait(1000);
+            if (!Board::Storage::filesystem().remove(path.c_str()))
+                ESP_LOGW("audio", "could not delete %s", path.c_str());
+            memosStale_ = true;
+        }
+        break;
+    }
+}
+
+void App::scanAudiobooks() {
+    audiobooks_.clear();
+    if (!storage_.mounted())
+        return;
+    fs::FS& filesystem = Board::Storage::filesystem();
+    // Books sit in /audiobooks or one folder down, as copied from a library.
+    const auto scan = [&](const std::string& folder, bool descend, auto& self) -> void {
+        File directory = filesystem.open(folder.c_str());
+        if (!directory || !directory.isDirectory()) {
+            if (directory)
+                directory.close();
+            return;
+        }
+        while (File entry = directory.openNextFile()) {
+            const std::string path = entry.path();
+            const bool isDirectory = entry.isDirectory();
+            entry.close();
+            const size_t slash = path.find_last_of('/');
+            const std::string_view name = slash == std::string::npos ? std::string_view{path}
+                                                                     : std::string_view{path}.substr(slash + 1);
+            if (name.empty() || name.front() == '.')
+                continue;
+            if (isDirectory) {
+                if (descend)
+                    self(path, false, self);
+                continue;
+            }
+            if (!audio::isAudiobookFile(path))
+                continue;
+            screens::AudiobookEntry book{.path = path, .name = audio::displayName(path)};
+            const std::string positionPath = audio::positionPathFor(path);
+            if (auto text = StorageFiles::readTextFile(filesystem, positionPath.c_str(), 64)) {
+                if (const auto saved = audio::parsePosition(*text)) {
+                    book.started = saved->positionMs > 0;
+                    book.percent = audio::percentListened(*saved);
+                }
+            }
+            audiobooks_.push_back(std::move(book));
+        }
+        directory.close();
+    };
+    scan(audio::kAudiobooksPath, true, scan);
+    std::ranges::sort(audiobooks_, {}, &screens::AudiobookEntry::name);
+}
+
+void App::scanMemos() {
+    memos_.clear();
+    if (!storage_.mounted())
+        return;
+    File directory = Board::Storage::filesystem().open(audio::kMemosPath);
+    if (!directory || !directory.isDirectory()) {
+        if (directory)
+            directory.close();
+        return;
+    }
+    while (File entry = directory.openNextFile()) {
+        const std::string path = entry.path();
+        const size_t size = entry.size();
+        const bool isDirectory = entry.isDirectory();
+        entry.close();
+        const auto number = audio::memoNumber(path);
+        if (isDirectory || !number)
+            continue;
+        constexpr uint32_t kBytesPerSecond = audio::kMemoSampleRateHz * 2;
+        const uint64_t durationMs =
+            size > audio::kWavHeaderBytes ? (size - audio::kWavHeaderBytes) * 1000ULL / kBytesPerSecond : 0;
+        memos_.push_back({.path = path, .number = *number, .durationMs = durationMs});
+    }
+    directory.close();
+    std::ranges::sort(memos_, std::ranges::greater{}, &screens::MemoEntry::number);
 }
 
 void App::handleScreenAction(screens::Action action, uint32_t nowMs) {
@@ -377,7 +576,7 @@ void App::handleScreenAction(screens::Action action, uint32_t nowMs) {
         screens::status(immediateUi_, immediateUi_.text(UiText::Storage), immediateUi_.text(UiText::Checking));
         if (!startBackgroundJob(JobKind::StorageCheck))
             showTransientStatus(immediateUi_.text(UiText::Storage), immediateUi_.text(UiText::CouldNotStart), {}, 1200,
-                                screens::Screen::Device);
+                                screens::deviceHome());
         return;
     case screens::Action::EnableStorageEncryption:
         screens::status(immediateUi_, immediateUi_.text(UiText::StorageEncryption),
@@ -386,7 +585,7 @@ void App::handleScreenAction(screens::Action action, uint32_t nowMs) {
         ReadingProgress::mirror(readerScreen_.session, readerScreen_.store);
         if (!storage_.mounted() || !settings::enableNvsEncryption(prefs_, settingsStore_)) {
             showTransientStatus(immediateUi_.text(UiText::StorageEncryption), immediateUi_.text(UiText::Unavailable),
-                                {}, 1200, screens::Screen::Device);
+                                {}, 1200, screens::deviceHome());
         }
         return;
     case screens::Action::OtaCheck:
@@ -468,7 +667,7 @@ void App::handleInput(Input::ActionMask actions, uint32_t nowMs) {
     if (Input::hasAction(actions, Input::ActionBack)) {
         if (companionApi_.active()) {
             companionApi_.end();
-            screen_ = screens::Screen::Device;
+            screen_ = screens::deviceHome();
             renderScreen(nowMs);
         } else if (screen_ != screens::Screen::Reader) {
             if (screen_ == screens::Screen::Read) {
@@ -476,7 +675,7 @@ void App::handleInput(Input::ActionMask actions, uint32_t nowMs) {
                 screen_ = screens::Screen::Reader;
             } else if (screen_ == screens::Screen::StorageEncryption || screen_ == screens::Screen::Sync
                        || screen_ == screens::Screen::Ota) {
-                screen_ = screens::Screen::Device;
+                screen_ = screens::deviceHome();
             } else if (screen_ == screens::Screen::WifiConnect) {
                 networkScreen_.closeWifi();
                 screen_ = screens::Screen::WifiScan;
@@ -490,6 +689,8 @@ void App::handleInput(Input::ActionMask actions, uint32_t nowMs) {
                 screen_ = screens::Screen::Settings;
             } else if (screen_ == screens::Screen::BookFonts) {
                 screen_ = screens::Screen::Read;
+            } else if (screen_ == screens::Screen::AudiobookPlayer) {
+                screen_ = screens::Screen::Audiobooks;
             } else if (screen_ == screens::Screen::FocusNameEdit) {
                 screen_ = screens::Screen::FocusEditor;
             } else if (screen_ == screens::Screen::FocusEditor) {
@@ -629,7 +830,7 @@ void App::updateBackgroundJob() {
         if (completed == JobKind::StorageCheck) {
             reloadStorageCatalogs();
             showTransientStatus(immediateUi_.text(UiText::Storage), update.line1, update.line2, 1800,
-                                screens::Screen::Device);
+                                screens::deviceHome());
             return;
         }
 
@@ -806,6 +1007,7 @@ void App::enterUsbTransfer(uint32_t nowMs) {
 #if RSVP_USB_TRANSFER_ENABLED
     if (serialCompanion_.active())
         return;
+    audio_.stopAndWait(1500); // The computer is about to own the card.
     ReadingProgress::save(readerScreen_.session, prefs_, true, nowMs);
     ReadingProgress::mirror(readerScreen_.session, readerScreen_.store);
     if (auto result = settingsStore_.flush(); !result) {
@@ -1011,6 +1213,7 @@ void App::lightSleepFromStandby() {
 }
 
 void App::powerOff(uint32_t nowMs) {
+    audio_.stopAndWait(1500); // Saves the listening position or finishes the memo file.
     if (companionApi_.active())
         companionApi_.end();
     if (screen_ == screens::Screen::FocusSession)

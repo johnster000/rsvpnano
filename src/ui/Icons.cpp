@@ -51,6 +51,15 @@ namespace ui {
         case Icon::Down:
             drawChevronIcon(output, rect, ink, icon == Icon::Up);
             break;
+        case Icon::Headphones:
+        case Icon::Microphone:
+        case Icon::Record:
+        case Icon::Stop:
+        case Icon::Previous:
+        case Icon::Next:
+        case Icon::Speaker:
+            drawAudioIcon(output, rect, icon, ink, surface);
+            break;
         default:
             break;
         }
@@ -112,6 +121,56 @@ namespace ui {
             const int16_t y = static_cast<int16_t>(up ? cy - 5 + step : cy + 4 - step);
             output.fillRect(static_cast<int16_t>(cx - step - 1), y, 3, 3, ink);
             output.fillRect(static_cast<int16_t>(cx + step - 1), y, 3, 3, ink);
+        }
+    }
+
+    void Context::drawAudioIcon(Arduino_GFX& output, Rect rect, Icon icon, uint16_t ink, uint16_t surface) {
+        const int16_t cx = static_cast<int16_t>(rect.x + rect.w / 2);
+        const int16_t cy = static_cast<int16_t>(rect.y + rect.h / 2);
+        const auto at = [](int value) {
+            return static_cast<int16_t>(value);
+        };
+        switch (icon) {
+        case Icon::Headphones:
+            // Headband ring cut to its upper half, with an ear cup at each end.
+            output.fillCircle(cx, at(cy + 1), 9, ink);
+            output.fillCircle(cx, at(cy + 1), 6, surface);
+            output.fillRect(at(cx - 10), at(cy + 2), 21, 9, surface);
+            output.fillRoundRect(at(cx - 10), at(cy + 1), 5, 9, 2, ink);
+            output.fillRoundRect(at(cx + 6), at(cy + 1), 5, 9, 2, ink);
+            break;
+        case Icon::Microphone:
+            output.fillRoundRect(at(cx - 4), at(cy - 10), 9, 14, 4, ink);
+            output.fillCircle(cx, at(cy + 1), 8, ink);
+            output.fillCircle(cx, at(cy + 1), 6, surface);
+            output.fillRect(at(cx - 8), at(cy - 7), 17, 8, surface);
+            output.fillRoundRect(at(cx - 4), at(cy - 10), 9, 14, 4, ink);
+            output.fillRect(at(cx - 1), at(cy + 8), 3, 3, ink);
+            output.fillRect(at(cx - 5), at(cy + 10), 11, 2, ink);
+            break;
+        case Icon::Record:
+            output.fillCircle(cx, cy, 8, ink);
+            break;
+        case Icon::Stop:
+            output.fillRect(at(cx - 7), at(cy - 7), 14, 14, ink);
+            break;
+        case Icon::Previous:
+            output.fillRect(at(cx - 9), at(cy - 8), 3, 17, ink);
+            output.fillTriangle(at(cx - 6), cy, at(cx + 7), at(cy - 8), at(cx + 7), at(cy + 8), ink);
+            break;
+        case Icon::Next:
+            output.fillTriangle(at(cx - 7), at(cy - 8), at(cx - 7), at(cy + 8), at(cx + 6), cy, ink);
+            output.fillRect(at(cx + 7), at(cy - 8), 3, 17, ink);
+            break;
+        case Icon::Speaker:
+            output.fillRect(at(cx - 9), at(cy - 3), 5, 7, ink);
+            output.fillTriangle(at(cx - 5), cy, at(cx + 2), at(cy - 8), at(cx + 2), at(cy + 8), ink);
+            output.fillRect(at(cx - 5), at(cy - 3), 7, 7, ink);
+            output.fillRect(at(cx + 5), at(cy - 3), 2, 7, ink);
+            output.fillRect(at(cx + 9), at(cy - 6), 2, 13, ink);
+            break;
+        default:
+            break;
         }
     }
 

@@ -235,4 +235,30 @@ namespace BoardDrivers::Es8311 {
         return context.available;
     }
 
+    bool beginCodec(Context& context) {
+        if (context.available)
+            return true;
+        if (!detectCodec(context) || !configureCodec(context)) {
+            ESP_LOGW(kTag, "Audio codec setup failed");
+            return false;
+        }
+        context.available = true;
+        ESP_LOGI(kTag, "Speaker path ready");
+        return true;
+    }
+
+    bool startDac(Context& context) {
+        return context.available && startCodec(context);
+    }
+
+    void muteDac(Context& context) {
+        uint8_t dacMute = 0;
+        if (context.available && readRegister(context, kDacReg31, dacMute))
+            writeRegister(context, kDacReg31, static_cast<uint8_t>(dacMute | 0x60));
+    }
+
+    bool setDacVolume(Context& context, uint8_t level) {
+        return context.available && writeRegister(context, kDacReg32, level);
+    }
+
 } // namespace BoardDrivers::Es8311

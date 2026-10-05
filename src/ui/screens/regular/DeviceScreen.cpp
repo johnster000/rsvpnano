@@ -118,7 +118,7 @@ namespace screens {
         if (detail::back(ui, buttons.next(buttonWidth))) {
             encryptionAcknowledged = false;
             encryptionControlsVisible = false;
-            screen = Screen::Device;
+            screen = deviceHome();
             return Action::None;
         }
         if (ui.button(buttons.next(buttonWidth), ui.text(UiText::EnableProtection),

@@ -38,3 +38,9 @@ namespace screens::detail {
         return area;
     }
 } // namespace screens::detail
+
+namespace screens {
+    Screen deviceHome() {
+        return Screen::Device;
+    }
+} // namespace screens

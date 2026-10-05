@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
                 screens::read(ui, "The Left Hand of Darkness", "Ursula K. Le Guin", 42, screen);
                 break;
             case screens::Screen::Settings:
-                screens::settings(ui, screen);
+                screens::settings(ui, {}, screen);
                 break;
             case screens::Screen::Device:
                 screens::device(ui, true, 18, settings::NvsEncryptionState::Available, screen);

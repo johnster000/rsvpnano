@@ -133,6 +133,13 @@ namespace ui {
         Back,
         Up,
         Down,
+        Headphones,
+        Microphone,
+        Record,
+        Stop,
+        Previous,
+        Next,
+        Speaker,
     };
 
     enum class TextAlign : uint8_t {
@@ -446,6 +453,7 @@ namespace ui {
         void drawSignIcon(Arduino_GFX& output, Rect rect, uint16_t ink, bool plus);
         void drawBackIcon(Arduino_GFX& output, Rect rect, uint16_t ink);
         void drawChevronIcon(Arduino_GFX& output, Rect rect, uint16_t ink, bool up);
+        void drawAudioIcon(Arduino_GFX& output, Rect rect, Icon icon, uint16_t ink, uint16_t surface);
         void drawBatteryIcon(Arduino_GFX& output, Rect rect, uint8_t percent, bool charging, uint16_t ink,
                              uint16_t surface);
         int valueAt(Rect rect, uint16_t x, int minimum, int maximum, int step) const;

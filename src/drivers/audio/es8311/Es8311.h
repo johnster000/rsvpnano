@@ -38,4 +38,12 @@ namespace BoardDrivers::Es8311 {
     bool writeSamples(Context& context, const int16_t* samples, size_t sampleCount, uint32_t timeoutMs);
     bool available(const Context& context);
 
+    // Codec registers only, for boards that run their own I2S channels; MCLK must already be running.
+    bool beginCodec(Context& context);
+    // Re-arms the DAC after the bus clocks changed, then unmutes it.
+    bool startDac(Context& context);
+    void muteDac(Context& context);
+    // DAC digital volume register: 0x00 mutes, 0xBF is 0 dB, 0xFF is +32 dB.
+    bool setDacVolume(Context& context, uint8_t level);
+
 } // namespace BoardDrivers::Es8311

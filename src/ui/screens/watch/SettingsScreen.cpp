@@ -1,7 +1,7 @@
 #include "ui/screens/watch/Layout.h"
 
 namespace screens {
-    Action settings(ui::Context& ui, Screen& screen) {
+    Action settings(ui::Context& ui, const DeviceSummary&, Screen& screen) {
         detail::navigation(ui, Screen::Settings, screen);
         const auto area = detail::tabContent(ui);
         if (ui.height() < 240) {

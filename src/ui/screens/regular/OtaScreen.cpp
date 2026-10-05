@@ -9,7 +9,7 @@ namespace screens {
         constexpr int16_t gap = 6;
         ui::Grid actions{content, 3, 56, gap};
         if (detail::back(ui, actions.next()))
-            screen = Screen::Device;
+            screen = deviceHome();
         if (ui.button(actions.next(), ui.text(UiText::CheckOnly)))
             return Action::OtaCheck;
         if (ui.button(actions.next(), ui.text(UiText::InstallUpdate)))

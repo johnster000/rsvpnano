@@ -13,6 +13,7 @@
 
 namespace WaveshareLcd349::AudioWiring {
     constexpr uint8_t kEs8311Address = 0x18;
+    constexpr uint8_t kEs7210Address = 0x40;
     constexpr int kMclkPin = 7;
     constexpr int kBclkPin = 15;
     constexpr int kWsPin = 46;

@@ -176,6 +176,14 @@ enum class UiText : uint8_t {
     Gap,
     Menu,
     Back,
+    Audiobooks,
+    Voice,
+    NoAudiobooks,
+    NoMemos,
+    Record,
+    Stop,
+    Recording,
+    Memo,
     Count,
 };
 

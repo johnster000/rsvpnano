@@ -538,7 +538,10 @@ namespace ui {
         state = combine(state, down);
         const Claim widget = claim(Kind::Tab, rect, state);
         if (widget.changed) {
-            const int16_t iconWidth = icon == Icon::None ? 0 : std::min<int16_t>(26, rect.w / 3);
+            int16_t iconWidth = icon == Icon::None ? 0 : std::min<int16_t>(26, rect.w / 3);
+            // A long label keeps its full size and gives up the icon instead.
+            if (iconWidth > 0 && textWidthFor(text, 2) > rect.w - iconWidth - 12)
+                iconWidth = 0;
             const auto label = prepareText({static_cast<int16_t>(iconWidth + 8), 0,
                                             static_cast<int16_t>(rect.w - iconWidth - 12), rect.h},
                                            text, 2, TextAlign::Center);
@@ -553,7 +556,7 @@ namespace ui {
                                     color(ui::themes::ColorRole::Accent));
                 }
                 const uint16_t ink = color(active ? ui::themes::ColorRole::Foreground : ui::themes::ColorRole::Muted);
-                if (icon != Icon::None)
+                if (iconWidth > 0)
                     drawIcon(output, {static_cast<int16_t>(rect.x + 7), rect.y, iconWidth, rect.h}, icon, ink, surface);
                 drawText(output, label, ink, rect.x, rect.y);
             });

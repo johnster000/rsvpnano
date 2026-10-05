@@ -51,6 +51,9 @@ namespace screens {
         Usb,
         Status,
         Standby,
+        Audiobooks,
+        AudiobookPlayer,
+        Voice,
     };
 
     enum class Action : uint8_t {
@@ -69,7 +72,15 @@ namespace screens {
     };
 
     Action read(ui::Context& ui, std::string_view title, std::string_view author, uint8_t progress, Screen& screen);
-    Action settings(ui::Context& ui, Screen& screen);
+    // What the Settings menu shows about storage on layouts that fold the Device tab into it.
+    struct DeviceSummary {
+        bool storageReady = false;
+        size_t bookCount = 0;
+        settings::NvsEncryptionState encryption = settings::NvsEncryptionState::Unavailable;
+    };
+    Action settings(ui::Context& ui, const DeviceSummary& device, Screen& screen);
+    // Where storage, sync and update screens return: Settings, or Device on layouts that keep that tab.
+    Screen deviceHome();
     bool readingSettings(ui::Context& ui, settings::ReadingSettings& settings, Screen& screen);
     class InterfaceScreen {
     public:

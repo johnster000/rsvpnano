@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 
+#include "audio/AudioEngine.h"
 #include "board/BoardDisplay.h"
 #include "board/BoardPower.h"
 #include "companion/http/CompanionApi.h"
@@ -18,6 +19,7 @@
 #include "settings/SettingsStore.h"
 #include "library/StorageManager.h"
 #include "ui/Ui.h"
+#include "ui/screens/AudioScreens.h"
 #include "ui/screens/ChaptersScreen.h"
 #include "ui/screens/LibraryScreen.h"
 #include "ui/screens/ReaderScreen.h"
@@ -57,6 +59,11 @@ private:
     void handleTouch(uint32_t nowMs);
     void leaveReader(uint32_t nowMs);
     void cycleTheme(uint32_t nowMs);
+    void renderAudioScreen(screens::Screen renderedScreen, uint32_t nowMs);
+    void handleAudioRequest(const screens::AudioRequest& request, screens::Screen renderedScreen, uint32_t nowMs);
+    void enteredScreen(screens::Screen screen);
+    void scanAudiobooks();
+    void scanMemos();
     void reloadStorageCatalogs();
     void runRss();
     void runBookOpen(size_t index, uint32_t nowMs);
@@ -104,6 +111,14 @@ private:
     UsbMassStorageManager usbTransfer_;
     CompanionSerial serialCompanion_{companionApi_, usbTransfer_};
     screens::StandbyScreen standbyScreen_;
+    audio::AudioEngine audio_;
+    screens::AudiobooksScreen audiobooksScreen_;
+    screens::VoiceScreen voiceScreen_;
+    std::vector<screens::AudiobookEntry> audiobooks_;
+    std::vector<screens::MemoEntry> memos_;
+    bool audiobooksStale_ = true;
+    bool memosStale_ = true;
+    audio::Mode lastVoiceMode_ = audio::Mode::Idle;
     QueueHandle_t jobQueue_ = nullptr;
     JobKind jobKind_ = JobKind::None;
     size_t jobBookIndex_ = 0;

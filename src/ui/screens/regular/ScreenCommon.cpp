@@ -1,6 +1,7 @@
 #include "ui/screens/ScreenCommon.h"
 
 #include <algorithm>
+#include <array>
 
 namespace screens::detail {
 
@@ -24,36 +25,51 @@ namespace screens::detail {
             return std::clamp<int16_t>(static_cast<int16_t>(ui.height() / 8), 48, 64);
         }
 
+        // Read, Audiobooks, Voice and Settings; Settings also holds what the Device tab used to.
+        struct Tab {
+            UiText label;
+            ui::Icon icon;
+            Screen destination;
+        };
+        constexpr std::array<Tab, 4> kTabs{{
+            {UiText::Read, ui::Icon::Books, Screen::Read},
+            {UiText::Audiobooks, ui::Icon::Headphones, Screen::Audiobooks},
+            {UiText::Voice, ui::Icon::Microphone, Screen::Voice},
+            {UiText::Settings, ui::Icon::Edit, Screen::Settings},
+        }};
+
+        size_t activeTab(Screen active) {
+            switch (active) {
+            case Screen::Read:
+            case Screen::Library:
+            case Screen::Chapters:
+            case Screen::BookFonts:
+                return 0;
+            case Screen::Audiobooks:
+            case Screen::AudiobookPlayer:
+                return 1;
+            case Screen::Voice:
+                return 2;
+            default:
+                return 3;
+            }
+        }
+
         Action topNavigation(ui::Context& ui, Screen active, Screen& screen) {
             const int16_t barHeight = topBarHeight(ui);
             const int16_t powerX = static_cast<int16_t>(ui.width() - kPowerSize - 8);
             ui::Row tabs{{0, 0, static_cast<int16_t>(powerX - 4), barHeight}};
-            const int16_t tabWidth = static_cast<int16_t>(tabs.bounds.w / 4);
+            const int16_t tabWidth = static_cast<int16_t>(tabs.bounds.w / kTabs.size());
             // Narrow tabs give their labels the room an icon would take.
             const bool icons = tabWidth >= 140;
-            const auto tab = [&](UiText text, bool selected, ui::Icon icon, Screen destination, bool last = false) {
+            const size_t selected = activeTab(active);
+            for (size_t index = 0; index < kTabs.size(); ++index) {
                 const int16_t width =
-                    last ? static_cast<int16_t>(tabs.bounds.w - tabs.cursor) : tabWidth;
-                if (ui.tab(tabs.next(width), ui.text(text), selected, icons ? icon : ui::Icon::None))
-                    screen = destination;
-            };
-            tab(UiText::Read,
-                active == Screen::Read || active == Screen::Library || active == Screen::Chapters
-                    || active == Screen::BookFonts,
-                ui::Icon::Books, Screen::Read);
-            tab(UiText::Settings,
-                active == Screen::Settings || active == Screen::ReadingSettings || active == Screen::InterfaceSettings
-                    || active == Screen::PacingSettings || active == Screen::ReaderAppearance
-                    || active == Screen::NetworkSettings,
-                ui::Icon::Edit, Screen::Settings);
-            tab(UiText::Device,
-                active == Screen::Device || active == Screen::StorageEncryption || active == Screen::Sync
-                    || active == Screen::Ota,
-                ui::Icon::Device, Screen::Device);
-            tab(UiText::Focus,
-                active == Screen::FocusTimers || active == Screen::FocusEditor || active == Screen::FocusNameEdit
-                    || active == Screen::FocusSession,
-                ui::Icon::Hourglass, Screen::FocusTimers, true);
+                    index + 1 == kTabs.size() ? static_cast<int16_t>(tabs.bounds.w - tabs.cursor) : tabWidth;
+                if (ui.tab(tabs.next(width), ui.text(kTabs[index].label), index == selected,
+                           icons ? kTabs[index].icon : ui::Icon::None))
+                    screen = kTabs[index].destination;
+            }
             if (ui.iconButton({powerX, static_cast<int16_t>((barHeight - kPowerSize) / 2), kPowerSize, kPowerSize},
                               ui::Icon::Power)) {
                 return Action::PowerOff;
@@ -72,32 +88,15 @@ namespace screens::detail {
         if (!sideRail(ui))
             return Action::None;
 
-        const int16_t tabHeight = static_cast<int16_t>(ui.height() / 4);
+        const int16_t tabHeight = static_cast<int16_t>(ui.height() / kTabs.size());
         ui::Column tabs{{0, 0, kRailWidth, ui.height()}};
-        if (ui.tab(tabs.next(tabHeight), ui.text(UiText::Read),
-                   active == Screen::Read || active == Screen::Library || active == Screen::Chapters
-                       || active == Screen::BookFonts,
-                   ui::Icon::Books)) {
-            screen = Screen::Read;
-        }
-        if (ui.tab(tabs.next(tabHeight), ui.text(UiText::Settings),
-                   active == Screen::Settings || active == Screen::ReadingSettings
-                       || active == Screen::InterfaceSettings || active == Screen::PacingSettings
-                       || active == Screen::ReaderAppearance || active == Screen::NetworkSettings,
-                   ui::Icon::Edit)) {
-            screen = Screen::Settings;
-        }
-        if (ui.tab(tabs.next(tabHeight), ui.text(UiText::Device),
-                   active == Screen::Device || active == Screen::StorageEncryption || active == Screen::Sync
-                       || active == Screen::Ota,
-                   ui::Icon::Device)) {
-            screen = Screen::Device;
-        }
-        if (ui.tab(tabs.next(static_cast<int16_t>(ui.height() - tabHeight * 3)), ui.text(UiText::Focus),
-                   active == Screen::FocusTimers || active == Screen::FocusEditor || active == Screen::FocusNameEdit
-                       || active == Screen::FocusSession,
-                   ui::Icon::Hourglass)) {
-            screen = Screen::FocusTimers;
+        const size_t selected = activeTab(active);
+        for (size_t index = 0; index < kTabs.size(); ++index) {
+            const int16_t height = index + 1 == kTabs.size()
+                                     ? static_cast<int16_t>(ui.height() - tabHeight * (kTabs.size() - 1))
+                                     : tabHeight;
+            if (ui.tab(tabs.next(height), ui.text(kTabs[index].label), index == selected, kTabs[index].icon))
+                screen = kTabs[index].destination;
         }
         return Action::None;
     }
@@ -118,3 +117,9 @@ namespace screens::detail {
     }
 
 } // namespace screens::detail
+
+namespace screens {
+    Screen deviceHome() {
+        return Screen::Settings;
+    }
+} // namespace screens

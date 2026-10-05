@@ -21,6 +21,7 @@
 #include "ui/screens/ChaptersScreen.h"
 #include "ui/screens/LibraryScreen.h"
 #include "ui/screens/SentenceScrub.h"
+#include "ui/screens/AudioScreens.h"
 #include "ui/screens/PageReaderScreen.h"
 #include "ui/screens/ScreenCommon.h"
 #include "ui/screens/Screens.h"
@@ -1937,6 +1938,204 @@ void test_scrub_layout_frames_the_current_sentence_with_its_neighbours() {
     assertLine(layout.lines[1], 5, 8, Part::Current, false, false);
 }
 
+namespace {
+    // Presses and releases at one point on a 640x172 side-rail screen, drawing `frame` after each sample.
+    template<typename Frame>
+    void tapAt(ui::Context& context, uint16_t x, uint16_t y, Frame&& frame) {
+        static uint32_t now = 1000;
+        for (const bool down: {true, false}) {
+            gTouchResult = ui::TouchSampleResult::Contact;
+            gContact = {down, x, y};
+            now += 30;
+            context.pollTouch(now);
+            context.beginFrame(9);
+            frame();
+            context.endFrame();
+        }
+    }
+
+    struct LcdContext {
+        Arduino_GFX gfx{640, 172};
+        ui::Context context{gfx};
+        LcdContext() {
+            context.setTheme(theme());
+            context.setTouchSource({.surface = {640, 172}, .poll = &pollTouch});
+        }
+    };
+
+    struct Point {
+        uint16_t x;
+        uint16_t y;
+    };
+
+    Point centerOf(ui::Rect rect) {
+        return {static_cast<uint16_t>(rect.x + rect.w / 2), static_cast<uint16_t>(rect.y + rect.h / 2)};
+    }
+} // namespace
+
+void test_side_rail_tabs_are_read_audiobooks_voice_and_settings() {
+    constexpr std::array destinations{screens::Screen::Read, screens::Screen::Audiobooks, screens::Screen::Voice,
+                                      screens::Screen::Settings};
+    for (size_t index = 0; index < destinations.size(); ++index) {
+        LcdContext lcd;
+        auto screen = screens::Screen::Ota;
+        tapAt(lcd.context, 60, static_cast<uint16_t>(21 + index * 43),
+              [&] { screens::detail::navigation(lcd.context, screens::Screen::Ota, screen); });
+        TEST_ASSERT_EQUAL(destinations[index], screen);
+    }
+}
+
+void test_settings_menu_holds_the_device_tools() {
+    // The grid the menu lays out at 640x172: three columns, four rows of 36 px.
+    std::array<ui::Rect, 11> cells;
+    ui::Grid grid{{148, 8, 484, 156}, 3, 36, 4};
+    for (ui::Rect& cell: cells)
+        cell = grid.next();
+    struct Case {
+        size_t cell;
+        screens::Screen screen;
+        screens::Action action;
+    };
+    const screens::DeviceSummary device{.storageReady = true,
+                                        .bookCount = 3,
+                                        .encryption = settings::NvsEncryptionState::Available};
+    for (const Case expected: {Case{0, screens::Screen::ReadingSettings, screens::Action::None},
+                               Case{3, screens::Screen::InterfaceSettings, screens::Action::None},
+                               Case{5, screens::Screen::Settings, screens::Action::StorageStatus},
+                               Case{6, screens::Screen::StorageEncryption, screens::Action::None},
+                               Case{7, screens::Screen::Settings, screens::Action::UsbTransfer},
+                               Case{8, screens::Screen::Settings, screens::Action::CompanionSync},
+                               Case{9, screens::Screen::Settings, screens::Action::RssRefresh},
+                               Case{10, screens::Screen::Ota, screens::Action::None}}) {
+        LcdContext lcd;
+        auto screen = screens::Screen::Settings;
+        auto action = screens::Action::None;
+        const Point point = centerOf(cells[expected.cell]);
+        tapAt(lcd.context, point.x, point.y, [&] {
+            const auto result = screens::settings(lcd.context, device, screen);
+            if (result != screens::Action::None)
+                action = result;
+        });
+        TEST_ASSERT_EQUAL(expected.screen, screen);
+        TEST_ASSERT_EQUAL(expected.action, action);
+    }
+    // Without a card, protection cannot be turned on from here.
+    LcdContext lcd;
+    auto screen = screens::Screen::Settings;
+    const Point encryption = centerOf(cells[6]);
+    tapAt(lcd.context, encryption.x, encryption.y, [&] {
+        screens::settings(lcd.context, {.encryption = settings::NvsEncryptionState::Available}, screen);
+    });
+    TEST_ASSERT_EQUAL(screens::Screen::Settings, screen);
+    TEST_ASSERT_EQUAL(screens::Screen::Settings, screens::deviceHome());
+}
+
+void test_audiobook_list_opens_the_player_for_the_tapped_book() {
+    const std::vector<screens::AudiobookEntry> books{
+        {.path = "/audiobooks/a.m4b", .name = "A"},
+        {.path = "/audiobooks/b.m4b", .name = "B", .percent = 40, .started = true},
+        {.path = "/audiobooks/c.m4b", .name = "C"},
+    };
+    LcdContext lcd;
+    screens::AudiobooksScreen audiobooks;
+    auto screen = screens::Screen::Audiobooks;
+    screens::AudioRequest request;
+    tapAt(lcd.context, 300, 85, [&] {
+        const auto result = audiobooks.drawList(lcd.context, books, {}, screen);
+        if (result.type != screens::AudioRequest::Type::None)
+            request = result;
+    });
+    TEST_ASSERT_EQUAL(screens::AudioRequest::Type::Play, request.type);
+    TEST_ASSERT_EQUAL_UINT32(1, request.index);
+    TEST_ASSERT_EQUAL(screens::Screen::AudiobookPlayer, screen);
+
+    // An empty folder offers nothing to tap.
+    LcdContext empty;
+    screen = screens::Screen::Audiobooks;
+    request = {};
+    tapAt(empty.context, 300, 85, [&] { request = audiobooks.drawList(empty.context, {}, {}, screen); });
+    TEST_ASSERT_EQUAL(screens::AudioRequest::Type::None, request.type);
+}
+
+void test_audiobook_player_buttons_send_their_requests() {
+    using Type = screens::AudioRequest::Type;
+    struct Case {
+        uint16_t x;
+        uint16_t y;
+        Type type;
+        int32_t value;
+    };
+    screens::NowPlaying playing;
+    playing.status.mode = audio::Mode::Playing;
+    playing.status.content = audio::Content::Audiobook;
+    playing.status.durationMs = 3'600'000;
+    playing.title = "Dune";
+    for (const Case expected: {Case{188, 128, Type::Chapter, -1}, Case{275, 128, Type::Skip, -30},
+                               Case{390, 128, Type::TogglePause, 0}, Case{503, 128, Type::Skip, 30},
+                               Case{591, 128, Type::Chapter, 1}, Case{566, 25, Type::Volume, -10},
+                               Case{612, 25, Type::Volume, 10}}) {
+        LcdContext lcd;
+        screens::AudiobooksScreen audiobooks;
+        auto screen = screens::Screen::AudiobookPlayer;
+        screens::AudioRequest request;
+        tapAt(lcd.context, expected.x, expected.y, [&] {
+            const auto result = audiobooks.drawPlayer(lcd.context, playing, screen);
+            if (result.type != Type::None)
+                request = result;
+        });
+        TEST_ASSERT_EQUAL(expected.type, request.type);
+        TEST_ASSERT_EQUAL_INT32(expected.value, request.value);
+    }
+    LcdContext lcd;
+    screens::AudiobooksScreen audiobooks;
+    auto screen = screens::Screen::AudiobookPlayer;
+    tapAt(lcd.context, 180, 25, [&] { audiobooks.drawPlayer(lcd.context, playing, screen); });
+    TEST_ASSERT_EQUAL(screens::Screen::Audiobooks, screen);
+}
+
+void test_voice_screen_records_plays_and_deletes_after_confirming() {
+    using Type = screens::AudioRequest::Type;
+    const std::vector<screens::MemoEntry> memos{{.path = "/voice/memo-0002.wav", .number = 2, .durationMs = 5'000},
+                                                {.path = "/voice/memo-0001.wav", .number = 1, .durationMs = 9'000}};
+    LcdContext lcd;
+    screens::VoiceScreen voice;
+    auto screen = screens::Screen::Voice;
+    screens::AudioRequest request;
+    uint32_t now = 10'000;
+    const auto draw = [&](bool microphone, const screens::NowPlaying& playing) {
+        return [&, microphone] {
+            const auto result = voice.draw(lcd.context, memos, playing, microphone, now, screen);
+            if (result.type != Type::None)
+                request = result;
+        };
+    };
+    const screens::NowPlaying idle;
+    tapAt(lcd.context, 228, 53, draw(true, idle));
+    TEST_ASSERT_EQUAL(Type::Record, request.type);
+
+    request = {};
+    tapAt(lcd.context, 228, 53, draw(false, idle));
+    TEST_ASSERT_EQUAL(Type::None, request.type);
+
+    tapAt(lcd.context, 420, 32, draw(true, idle));
+    TEST_ASSERT_EQUAL(Type::Play, request.type);
+    TEST_ASSERT_EQUAL_UINT32(0, request.index);
+
+    request = {};
+    tapAt(lcd.context, 228, 134, draw(true, idle));
+    TEST_ASSERT_EQUAL(Type::None, request.type);
+    tapAt(lcd.context, 228, 134, draw(true, idle));
+    TEST_ASSERT_EQUAL(Type::Delete, request.type);
+    TEST_ASSERT_EQUAL_UINT32(0, request.index);
+
+    // While recording, the same button stops.
+    screens::NowPlaying recording;
+    recording.status.mode = audio::Mode::Recording;
+    request = {};
+    tapAt(lcd.context, 228, 53, draw(true, recording));
+    TEST_ASSERT_EQUAL(Type::Record, request.type);
+}
+
 void test_read_screen_labels_every_action() {
     Arduino_GFX gfx(640, 172);
     ui::Context context(gfx);
@@ -1967,8 +2166,8 @@ void test_square_regular_menus_reach_every_tab_and_power() {
         uint16_t width;
         uint16_t height;
     };
-    constexpr std::array destinations{screens::Screen::Read, screens::Screen::Settings, screens::Screen::Device,
-                                      screens::Screen::FocusTimers};
+    constexpr std::array destinations{screens::Screen::Read, screens::Screen::Audiobooks, screens::Screen::Voice,
+                                      screens::Screen::Settings};
     for (const Size size: {Size{480, 480}, Size{600, 450}}) {
         for (size_t i = 0; i <= destinations.size(); ++i) {
             Arduino_GFX gfx(static_cast<int16_t>(size.width), static_cast<int16_t>(size.height));
@@ -2082,6 +2281,11 @@ int main(int, char**) {
     RUN_TEST(test_read_screen_labels_every_action);
     RUN_TEST(test_side_rail_has_no_power_button_and_content_reaches_the_edge);
     RUN_TEST(test_scrub_layout_frames_the_current_sentence_with_its_neighbours);
+    RUN_TEST(test_side_rail_tabs_are_read_audiobooks_voice_and_settings);
+    RUN_TEST(test_settings_menu_holds_the_device_tools);
+    RUN_TEST(test_audiobook_list_opens_the_player_for_the_tapped_book);
+    RUN_TEST(test_audiobook_player_buttons_send_their_requests);
+    RUN_TEST(test_voice_screen_records_plays_and_deletes_after_confirming);
     RUN_TEST(appearanceChecks::fourRotaries);
     RUN_TEST(appearanceChecks::wordTargets);
     RUN_TEST(appearanceChecks::batteryAndArrowRedraw);
